@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 440" fill="none" role="img" aria-label="Corn ear illustration">
+  <defs>
+    <linearGradient id="cobBody" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E8D4A8"/>
+      <stop offset="45%" stop-color="#CEB888"/>
+      <stop offset="100%" stop-color="#A68B52"/>
+    </linearGradient>
+    <linearGradient id="huskGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5A8F4A"/>
+      <stop offset="100%" stop-color="#2F5C28"/>
+    </linearGradient>
+    <linearGradient id="huskBack" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3D6B32"/>
+      <stop offset="100%" stop-color="#1E3D1A"/>
+    </linearGradient>
+  </defs>
+  <!-- Back husk -->
+  <path d="M188 312c-28-48-32-118 8-182 42-68 108-102 168-88 12 58-18 132-70 188-52 56-118 92-106 82z" fill="url(#huskBack)" opacity="0.92"/>
+  <!-- Cob body -->
+  <ellipse cx="268" cy="228" rx="78" ry="168" transform="rotate(-8 268 228)" fill="url(#cobBody)" stroke="#8B7344" stroke-width="3"/>
+  <!-- Kernel rows (stylized) -->
+  <g fill="#B59A6B" opacity="0.85">
+    <ellipse cx="248" cy="138" rx="9" ry="12" transform="rotate(-8 248 138)"/>
+    <ellipse cx="266" cy="132" rx="9" ry="12" transform="rotate(-8 266 132)"/>
+    <ellipse cx="284" cy="128" rx="9" ry="12" transform="rotate(-8 284 128)"/>
+    <ellipse cx="240" cy="162" rx="9" ry="12" transform="rotate(-8 240 162)"/>
+    <ellipse cx="258" cy="156" rx="9" ry="12" transform="rotate(-8 258 156)"/>
+    <ellipse cx="276" cy="150" rx="9" ry="12" transform="rotate(-8 276 150)"/>
+    <ellipse cx="294" cy="146" rx="9" ry="12" transform="rotate(-8 294 146)"/>
+    <ellipse cx="232" cy="186" rx="9" ry="12" transform="rotate(-8 232 186)"/>
+    <ellipse cx="250" cy="180" rx="9" ry="12" transform="rotate(-8 250 180)"/>
+    <ellipse cx="268" cy="174" rx="9" ry="12" transform="rotate(-8 268 174)"/>
+    <ellipse cx="286" cy="168" rx="9" ry="12" transform="rotate(-8 286 168)"/>
+    <ellipse cx="304" cy="164" rx="9" ry="12" transform="rotate(-8 304 164)"/>
+    <ellipse cx="224" cy="210" rx="9" ry="12" transform="rotate(-8 224 210)"/>
+    <ellipse cx="242" cy="204" rx="9" ry="12" transform="rotate(-8 242 204)"/>
+    <ellipse cx="260" cy="198" rx="9" ry="12" transform="rotate(-8 260 198)"/>
+    <ellipse cx="278" cy="192" rx="9" ry="12" transform="rotate(-8 278 192)"/>
+    <ellipse cx="296" cy="186" rx="9" ry="12" transform="rotate(-8 296 186)"/>
+    <ellipse cx="314" cy="182" rx="9" ry="12" transform="rotate(-8 314 182)"/>
+    <ellipse cx="216" cy="234" rx="9" ry="12" transform="rotate(-8 216 234)"/>
+    <ellipse cx="234" cy="228" rx="9" ry="12" transform="rotate(-8 234 228)"/>
+    <ellipse cx="252" cy="222" rx="9" ry="12" transform="rotate(-8 252 222)"/>
+    <ellipse cx="270" cy="216" rx="9" ry="12" transform="rotate(-8 270 216)"/>
+    <ellipse cx="288" cy="210" rx="9" ry="12" transform="rotate(-8 288 210)"/>
+    <ellipse cx="306" cy="204" rx="9" ry="12" transform="rotate(-8 306 204)"/>
+    <ellipse cx="208" cy="258" rx="9" ry="12" transform="rotate(-8 208 258)"/>
+    <ellipse cx="226" cy="252" rx="9" ry="12" transform="rotate(-8 226 252)"/>
+    <ellipse cx="244" cy="246" rx="9" ry="12" transform="rotate(-8 244 246)"/>
+    <ellipse cx="262" cy="240" rx="9" ry="12" transform="rotate(-8 262 240)"/>
+    <ellipse cx="280" cy="234" rx="9" ry="12" transform="rotate(-8 280 234)"/>
+    <ellipse cx="298" cy="228" rx="9" ry="12" transform="rotate(-8 298 228)"/>
+    <ellipse cx="200" cy="282" rx="9" ry="12" transform="rotate(-8 200 282)"/>
+    <ellipse cx="218" cy="276" rx="9" ry="12" transform="rotate(-8 218 276)"/>
+    <ellipse cx="236" cy="270" rx="9" ry="12" transform="rotate(-8 236 270)"/>
+    <ellipse cx="254" cy="264" rx="9" ry="12" transform="rotate(-8 254 264)"/>
+    <ellipse cx="272" cy="258" rx="9" ry="12" transform="rotate(-8 272 258)"/>
+    <ellipse cx="290" cy="252" rx="9" ry="12" transform="rotate(-8 290 252)"/>
+    <ellipse cx="192" cy="306" rx="8" ry="11" transform="rotate(-8 192 306)"/>
+    <ellipse cx="210" cy="300" rx="8" ry="11" transform="rotate(-8 210 300)"/>
+    <ellipse cx="228" cy="294" rx="8" ry="11" transform="rotate(-8 228 294)"/>
+    <ellipse cx="246" cy="288" rx="8" ry="11" transform="rotate(-8 246 288)"/>
+    <ellipse cx="264" cy="282" rx="8" ry="11" transform="rotate(-8 264 282)"/>
+  </g>
+  <!-- Cob tip -->
+  <path d="M292 68c18 8 26 28 20 48-6 20-28 32-48 24" stroke="#8B7344" stroke-width="2.5" stroke-linecap="round" fill="#D4BC8A"/>
+  <!-- Front husk wrap -->
+  <path d="M165 298c-12-72 24-168 96-214 72-46 156-40 198 12-44 52-120 120-198 168-52 32-88 48-96 34z" fill="url(#huskGrad)" opacity="0.88"/>
+  <path d="M170 285c8-56 52-128 118-168" stroke="#1E3D1A" stroke-width="2" stroke-linecap="round" opacity="0.35"/>
+  <!-- Stem -->
+  <path d="M256 368c-4 18-8 42 4 52l12-4c-8-14-4-36 0-50" fill="#4A3520"/>
+</svg>
