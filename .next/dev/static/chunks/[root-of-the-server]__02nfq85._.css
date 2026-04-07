@@ -779,10 +779,6 @@
     max-width: var(--container-4xl);
   }
 
-  .max-w-full {
-    max-width: 100%;
-  }
-
   .max-w-lg {
     max-width: var(--container-lg);
   }

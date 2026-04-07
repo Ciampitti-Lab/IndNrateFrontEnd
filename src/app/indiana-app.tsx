@@ -711,8 +711,8 @@ function EonrHistogramChart({
   const [hoveredBar, setHoveredBar] = useState<{ count: number; lo: number; hi: number; x: number; y: number } | null>(null);
   const barColors = useMemo(() => regionHistogramBarGradient(accentHex), [accentHex]);
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
-  const width = isMobile ? 360 : 520;
-  const height = isMobile ? 236 : 224;
+  const width = isMobile ? 340 : 520;
+  const height = isMobile ? 248 : 224;
   const padL = 46;
   const padR = 14;
   const padT = 36;
@@ -725,6 +725,14 @@ function EonrHistogramChart({
 
   const xAt = (x: number) => padL + ((x - xMin) / xSpan) * chartW;
   const yBase = padT + chartH;
+  const yTicks = useMemo(() => {
+    const steps = [0, 0.25, 0.5, 0.75, 1];
+    return steps.map((t) => ({
+      y: yBase - t * chartH,
+      value: Math.round(maxCount * t),
+      t,
+    }));
+  }, [chartH, maxCount, yBase]);
 
   const xticks = useMemo(() => {
     const n = isMobile ? 5 : 6;
@@ -763,9 +771,8 @@ function EonrHistogramChart({
         </div>
       </div>
       <svg
-        width={width}
-        height={height}
-        className="mx-auto max-w-full"
+        viewBox={`0 0 ${width} ${height}`}
+        className="mx-auto h-auto w-full"
         role="img"
         aria-label={`Histogram of economic optimum nitrogen rates for region ${regionLabel}`}
       >
@@ -781,11 +788,11 @@ function EonrHistogramChart({
         </defs>
 
         {/* grid */}
-        {[0.25, 0.5, 0.75, 1].map((t) => {
-          const y = yBase - t * chartH;
+        {yTicks.filter((tick) => tick.t > 0).map((tick) => {
+          const y = tick.y;
           return (
             <line
-              key={t}
+              key={tick.t}
               x1={padL}
               x2={padL + chartW}
               y1={y}
@@ -805,6 +812,18 @@ function EonrHistogramChart({
           strokeWidth={1.25}
         />
         <line x1={padL} x2={padL} y1={padT} y2={yBase} stroke="#94a3b8" strokeWidth={1.25} />
+        {yTicks.map((tick) => (
+          <text
+            key={`yt-${tick.t}`}
+            x={padL - 8}
+            y={tick.y + 3}
+            textAnchor="end"
+            className="fill-slate-500"
+            style={{ fontSize: 10, fontWeight: 600 }}
+          >
+            {tick.value}
+          </text>
+        ))}
 
         {bins.map((b, i) => {
           const x0 = xAt(b.lo);
@@ -952,8 +971,8 @@ function EonrHistogramChart({
 }
 
 function EonrHistogramEmptyChart({ isMobile }: { isMobile: boolean }) {
-  const width = isMobile ? 360 : 520;
-  const height = isMobile ? 236 : 224;
+  const width = isMobile ? 340 : 520;
+  const height = isMobile ? 248 : 224;
   const padL = 46;
   const padR = 14;
   const padT = 36;
@@ -971,9 +990,8 @@ function EonrHistogramEmptyChart({ isMobile }: { isMobile: boolean }) {
         <p className="mt-0.5 text-sm font-semibold text-slate-600">On-farm trials — select a region</p>
       </div>
       <svg
-        width={width}
-        height={height}
-        className="mx-auto max-w-full"
+        viewBox={`0 0 ${width} ${height}`}
+        className="mx-auto h-auto w-full"
         role="img"
         aria-label="Empty histogram placeholder for on-farm trials"
       >
