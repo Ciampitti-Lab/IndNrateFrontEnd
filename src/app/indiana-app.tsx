@@ -708,6 +708,7 @@ function EonrHistogramChart({
   const uid = useId().replace(/:/g, '');
   const gradId = `eonrBarGrad-${uid}`;
   const filterId = `eonrBarShadow-${uid}`;
+  const [hoveredBar, setHoveredBar] = useState<{ count: number; lo: number; hi: number; x: number; y: number } | null>(null);
   const barColors = useMemo(() => regionHistogramBarGradient(accentHex), [accentHex]);
   const maxCount = Math.max(...bins.map((b) => b.count), 1);
   const width = isMobile ? 360 : 520;
@@ -829,10 +830,51 @@ function EonrHistogramChart({
                 initial={{ height: 0, y: yBase }}
                 animate={{ height: h, y: by }}
                 transition={{ type: 'spring', stiffness: 420, damping: 28, delay: i * 0.04 }}
+                onMouseEnter={() =>
+                  setHoveredBar({
+                    count: b.count,
+                    lo: b.lo,
+                    hi: b.hi,
+                    x: bx + bw / 2,
+                    y: by,
+                  })
+                }
+                onMouseLeave={() => setHoveredBar(null)}
               />
             </motion.g>
           );
         })}
+        {hoveredBar && (
+          <g>
+            <rect
+              x={Math.max(padL + 4, Math.min(padL + chartW - 214, hoveredBar.x - 107))}
+              y={Math.max(6, hoveredBar.y - 58)}
+              width={214}
+              height={44}
+              rx={10}
+              fill="#ffffff"
+              stroke={`${accentHex}66`}
+              strokeWidth={1}
+              style={{ filter: 'drop-shadow(0px 6px 14px rgba(15, 23, 42, 0.16))' }}
+            />
+            <text
+              x={Math.max(padL + 14, Math.min(padL + chartW - 204, hoveredBar.x - 97))}
+              y={Math.max(22, hoveredBar.y - 38)}
+              className="fill-slate-800"
+              style={{ fontSize: 11, fontWeight: 700 }}
+            >
+              {`${hoveredBar.count} trial${hoveredBar.count === 1 ? '' : 's'}`}
+            </text>
+            <text
+              x={Math.max(padL + 14, Math.min(padL + chartW - 204, hoveredBar.x - 97))}
+              y={Math.max(38, hoveredBar.y - 22)}
+              className="fill-slate-500"
+              style={{ fontSize: 10, fontWeight: 600 }}
+            >
+              {`${hoveredBar.lo.toFixed(1)}-${hoveredBar.hi.toFixed(1)} lb/ac`}
+            </text>
+          </g>
+        )}
 
         {xticks.map((xv) => (
           <text
@@ -905,6 +947,67 @@ function EonrHistogramChart({
           </dl>
         </div>
       )}
+    </div>
+  );
+}
+
+function EonrHistogramEmptyChart({ isMobile }: { isMobile: boolean }) {
+  const width = isMobile ? 360 : 520;
+  const height = isMobile ? 236 : 224;
+  const padL = 46;
+  const padR = 14;
+  const padT = 36;
+  const padB = 52;
+  const chartW = width - padL - padR;
+  const chartH = height - padT - padB;
+  const yBase = padT + chartH;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-slate-200/80 px-3 pb-2 pt-4 shadow-md sm:px-5">
+      <div className="mb-1 px-1">
+        <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-500">
+          EONR distribution
+        </h3>
+        <p className="mt-0.5 text-sm font-semibold text-slate-600">On-farm trials — select a region</p>
+      </div>
+      <svg
+        width={width}
+        height={height}
+        className="mx-auto max-w-full"
+        role="img"
+        aria-label="Empty histogram placeholder for on-farm trials"
+      >
+        {[0.25, 0.5, 0.75, 1].map((t) => {
+          const y = yBase - t * chartH;
+          return (
+            <line key={t} x1={padL} x2={padL + chartW} y1={y} y2={y} stroke="#e2e8f0" strokeWidth={1} />
+          );
+        })}
+        <line x1={padL} x2={padL + chartW} y1={yBase} y2={yBase} stroke="#94a3b8" strokeWidth={1.25} />
+        <line x1={padL} x2={padL} y1={padT} y2={yBase} stroke="#94a3b8" strokeWidth={1.25} />
+        <text
+          x={padL + chartW / 2}
+          y={height - 4}
+          textAnchor="middle"
+          className="fill-slate-600"
+          style={{ fontSize: 11, fontWeight: 700 }}
+        >
+          Nitrogen rate (lb/ac)
+        </text>
+        <text
+          x={14}
+          y={padT + chartH / 2}
+          textAnchor="middle"
+          transform={`rotate(-90 14 ${padT + chartH / 2})`}
+          className="fill-slate-600"
+          style={{ fontSize: 10, fontWeight: 700 }}
+        >
+          Trials
+        </text>
+      </svg>
+      <p className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm text-slate-600">
+        Select a region on the map to load trial data.
+      </p>
     </div>
   );
 }
@@ -990,6 +1093,7 @@ export default function Home() {
   simRequestPricesRef.current = { nPrice, cornPrice };
   const [showLocationOptions, setShowLocationOptions] = useState(false);
   const [resultsSection, setResultsSection] = useState<'optimize' | 'trials'>('optimize');
+  const [mobileTrialsView, setMobileTrialsView] = useState<'map' | 'results'>('map');
   const [selectedCountyName, setSelectedCountyName] = useState<string | null>(null);
   const [selectedCountyRegion, setSelectedCountyRegion] = useState<string | null>(null);
   const [countiesMapError, setCountiesMapError] = useState<string | null>(null);
@@ -1051,6 +1155,7 @@ export default function Home() {
       setContinueEnabled(false);
       setShowAONR(false);
       setResultsSection('optimize');
+      setMobileTrialsView('map');
       setMobileMapOpen(true);
       setSelectedCellId(null);
       setCellSimulations(null);
@@ -1099,6 +1204,7 @@ export default function Home() {
     setContinueEnabled(false);
     setShowAONR(false);
     setResultsSection('optimize');
+    setMobileTrialsView('map');
     setMobileMapOpen(true);
     setSelectedCellId(null);
     setCellSimulations(null);
@@ -1283,6 +1389,14 @@ export default function Home() {
 
   const handleContinue = () => {
     if (isMobile) {
+      if (showAONR && resultsSection === 'trials') {
+        setMobileTrialsView('results');
+        requestAnimationFrame(() => {
+          aonrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        return;
+      }
+
       // On phone: scroll first, then reveal plots (avoid instant pop-in).
       window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -1299,8 +1413,18 @@ export default function Home() {
   };
 
   const handleOpenMapFromFloatingButton = () => {
+    if (resultsSection === 'trials') {
+      setMobileTrialsView('map');
+      setMobileMapOpen(true);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+      return;
+    }
+
     setShowAONR(false);
     setResultsSection('optimize');
+    setMobileTrialsView('map');
     setContinueEnabled(false);
     setMobileMapOpen(true);
     requestAnimationFrame(() => {
@@ -1383,7 +1507,7 @@ export default function Home() {
 
   /** On small screens, Continue hides the map to show charts; On-Farm Trials needs the map to pick a region. */
   const showMapPanel =
-    !isMobile || mobileMapOpen || !showAONR || resultsSection === 'trials';
+    !isMobile || mobileMapOpen || !showAONR || (resultsSection === 'trials' && mobileTrialsView === 'map');
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900">
@@ -1555,6 +1679,13 @@ export default function Home() {
                               setSelectedCountyName(name);
                               setSelectedCountyRegion(region);
                               setSelectedRegionMapColor(fillColor);
+                              if (isMobile) {
+                                setMobileTrialsView('results');
+                                setMobileMapOpen(false);
+                                requestAnimationFrame(() => {
+                                  aonrRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                });
+                              }
                             }}
                             onLoadError={setCountiesMapError}
                           />
@@ -1597,7 +1728,10 @@ export default function Home() {
                   <div ref={aonrRef} className="mb-4 flex flex-wrap justify-center gap-3">
                     <button
                       type="button"
-                      onClick={() => setResultsSection('optimize')}
+                      onClick={() => {
+                        setResultsSection('optimize');
+                        setMobileTrialsView('map');
+                      }}
                       className={`inline-flex items-center rounded-2xl px-4 py-3 text-[11px] font-bold uppercase tracking-wide transition md:text-xs ${
                         resultsSection === 'optimize'
                           ? 'bg-[#CEB888] text-black shadow-sm'
@@ -1609,7 +1743,10 @@ export default function Home() {
                     <button
                       type="button"
                       disabled={!showAONR}
-                      onClick={() => setResultsSection('trials')}
+                      onClick={() => {
+                        setResultsSection('trials');
+                        if (isMobile) setMobileTrialsView('map');
+                      }}
                       className={`inline-flex items-center rounded-2xl px-4 py-3 text-[11px] font-bold uppercase tracking-wide transition md:text-xs ${
                         !showAONR
                           ? 'cursor-not-allowed border border-slate-200 bg-slate-200 text-slate-500'
@@ -1704,42 +1841,24 @@ export default function Home() {
                           className="overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-8 shadow-inner sm:p-10"
                           aria-labelledby="on-farm-trials-heading"
                         >
-                          <h2
-                            id="on-farm-trials-heading"
-                            className="text-lg font-black uppercase tracking-wide text-slate-800"
-                          >
-                            On-Farm Trials
-                          </h2>
                           {countiesMapError && (
                             <p className="mt-3 text-sm text-red-700" role="alert">
                               {countiesMapError}
                             </p>
                           )}
-                          {!countiesMapError && (
-                            <div className="mt-6 grid gap-6 md:grid-cols-2">
-                              <PriceInput
-                                label="N-Price ($/lb)"
-                                value={trialsNPrice}
-                                min={0.2}
-                                max={1.5}
-                                step={0.01}
-                                onChange={setTrialsNPrice}
-                                color="accent-black"
-                              />
-                              <PriceInput
-                                label="Corn Price ($/bu)"
-                                value={trialsCornPrice}
-                                min={3}
-                                max={10}
-                                step={0.1}
-                                onChange={setTrialsCornPrice}
-                                color="accent-green-600"
-                              />
-                            </div>
+                          {isMobile && mobileTrialsView === 'map' && !countiesMapError && (
+                            <p className="mt-6 rounded-xl border border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 shadow-sm">
+                              Select your region on the map, then tap Continue.
+                            </p>
                           )}
-                          {trialsRegionApiParam && (
+                          {!isMobile || mobileTrialsView === 'results' ? (
                             <div className="mt-8">
-                              {eonrHistogramLoading && (
+                              {!trialsRegionApiParam && (
+                                <EonrHistogramEmptyChart isMobile={isMobile} />
+                              )}
+                              {trialsRegionApiParam &&
+                                eonrHistogramLoading &&
+                                eonrHistogramBins.length === 0 && (
                                 <div
                                   className="flex min-h-[200px] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-slate-200 bg-white/60 px-6 py-10"
                                   aria-busy
@@ -1757,12 +1876,13 @@ export default function Home() {
                                   </p>
                                 </div>
                               )}
-                              {eonrHistogramError && !eonrHistogramLoading && (
+                              {trialsRegionApiParam && eonrHistogramError && !eonrHistogramLoading && (
                                 <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
                                   {eonrHistogramError}
                                 </p>
                               )}
-                              {!eonrHistogramLoading &&
+                              {trialsRegionApiParam &&
+                                !eonrHistogramLoading &&
                                 !eonrHistogramError &&
                                 eonrHistogramBins.length === 0 && (
                                   <p className="rounded-xl border border-slate-200 bg-white px-4 py-5 text-center text-sm text-slate-600 shadow-sm">
@@ -1771,16 +1891,52 @@ export default function Home() {
                                     the backend.
                                   </p>
                                 )}
-                              {!eonrHistogramLoading && eonrHistogramBins.length > 0 && (
-                                <EonrHistogramChart
-                                  bins={eonrHistogramBins}
-                                  regionLabel={trialsRegionApiParam}
-                                  isMobile={isMobile}
-                                  accentHex={selectedRegionMapColor ?? DEFAULT_HISTOGRAM_ACCENT}
-                                />
+                              {trialsRegionApiParam && eonrHistogramBins.length > 0 && (
+                                <div className="relative">
+                                  <EonrHistogramChart
+                                    bins={eonrHistogramBins}
+                                    regionLabel={trialsRegionApiParam}
+                                    isMobile={isMobile}
+                                    accentHex={selectedRegionMapColor ?? DEFAULT_HISTOGRAM_ACCENT}
+                                  />
+                                  {eonrHistogramLoading && (
+                                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl bg-white/35 backdrop-blur-[1px]">
+                                      <div
+                                        className="h-9 w-9 shrink-0 animate-spin rounded-full border-4"
+                                        style={{
+                                          borderColor: `${selectedRegionMapColor ?? DEFAULT_HISTOGRAM_ACCENT}35`,
+                                          borderTopColor: selectedRegionMapColor ?? DEFAULT_HISTOGRAM_ACCENT,
+                                        }}
+                                        aria-label="Updating histogram"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              {!countiesMapError && (
+                                <div className="mt-6 grid gap-6 md:grid-cols-2">
+                                  <PriceInput
+                                    label="N-Price ($/lb)"
+                                    value={trialsNPrice}
+                                    min={0.2}
+                                    max={1.5}
+                                    step={0.01}
+                                    onChange={setTrialsNPrice}
+                                    color="accent-black"
+                                  />
+                                  <PriceInput
+                                    label="Corn Price ($/bu)"
+                                    value={trialsCornPrice}
+                                    min={3}
+                                    max={10}
+                                    step={0.1}
+                                    onChange={setTrialsCornPrice}
+                                    color="accent-green-600"
+                                  />
+                                </div>
                               )}
                             </div>
-                          )}
+                          ) : null}
                         </section>
                       )}
                     </>
@@ -1791,7 +1947,7 @@ export default function Home() {
           </motion.div>
         )}
       </AnimatePresence>
-      {isMobile && showAONR && !mobileMapOpen && resultsSection === 'optimize' && (
+      {isMobile && showAONR && !mobileMapOpen && (
         <button
           type="button"
           onClick={handleOpenMapFromFloatingButton}

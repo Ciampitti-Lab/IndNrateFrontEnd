@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
-    "http://10.186.179.63:3000",
+    "http://10.186.182.226:3000",
     ...extraDevOrigins,
   ],
 };
