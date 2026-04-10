@@ -580,7 +580,7 @@ function extractEonrRatesFromTrialRows(rows: unknown[]): number[] {
 }
 
 /** Accepts several backend shapes: pre-binned rows, N-rate keys, raw observation list, numpy-style edges/counts. */
-function parseEonrCountPayload(raw: unknown, binWidthFallback = 10): EonrHistogramBin[] {
+function parseEonrCountPayload(raw: unknown, binWidthFallback = 25): EonrHistogramBin[] {
   if (raw === null || raw === undefined) return [];
 
   if (Array.isArray(raw)) {
@@ -658,6 +658,13 @@ function parseEonrCountPayload(raw: unknown, binWidthFallback = 10): EonrHistogr
 }
 
 const DEFAULT_HISTOGRAM_ACCENT = '#CEB888';
+const REGION_DISPLAY_LABELS: Record<string, string> = {
+  SW: 'South West',
+  SE: 'South East',
+  NW: 'North West',
+  NE: 'North East',
+  WC: 'West Center',
+};
 
 function parseHexRgb(hex: string): [number, number, number] | null {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
@@ -960,7 +967,7 @@ function EonrHistogramChart({
               <dd className="font-semibold tabular-nums text-slate-900">{fmt(stats.max)}</dd>
             </div>
             <div className="flex flex-col gap-0.5">
-              <dt className="text-[11px] font-medium text-slate-500">Count</dt>
+              <dt className="text-[11px] font-medium text-slate-500">Count of trials in the region</dt>
               <dd className="font-semibold tabular-nums text-slate-900">{stats.count}</dd>
             </div>
           </dl>
@@ -1118,14 +1125,17 @@ export default function Home() {
   const [eonrHistogramBins, setEonrHistogramBins] = useState<EonrHistogramBin[]>([]);
   const [eonrHistogramLoading, setEonrHistogramLoading] = useState(false);
   const [eonrHistogramError, setEonrHistogramError] = useState<string | null>(null);
-  const [trialsNPrice, setTrialsNPrice] = useState(0.65);
-  const [trialsCornPrice, setTrialsCornPrice] = useState(4.5);
   const [selectedRegionMapColor, setSelectedRegionMapColor] = useState<string | null>(null);
 
   const trialsRegionApiParam = useMemo(() => {
     const code = (selectedCountyRegion ?? selectedCountyName)?.trim();
     return code || null;
   }, [selectedCountyRegion, selectedCountyName]);
+  const trialsRegionDisplayLabel = useMemo(() => {
+    if (!trialsRegionApiParam) return null;
+    const normalized = trialsRegionApiParam.toUpperCase();
+    return REGION_DISPLAY_LABELS[normalized] ?? trialsRegionApiParam;
+  }, [trialsRegionApiParam]);
   const [geoError, setGeoError] = useState<string | null>(null);
   const [geoLocating, setGeoLocating] = useState(false);
   /** null until mounted; geolocation only gets a real prompt on secure contexts (HTTPS or localhost). */
@@ -1184,8 +1194,6 @@ export default function Home() {
       setEonrHistogramBins([]);
       setEonrHistogramError(null);
       setEonrHistogramLoading(false);
-      setTrialsNPrice(0.65);
-      setTrialsCornPrice(4.5);
       setSelectedRegionMapColor(null);
       if (continueTimerRef.current !== null) {
         window.clearTimeout(continueTimerRef.current);
@@ -1233,8 +1241,6 @@ export default function Home() {
     setEonrHistogramBins([]);
     setEonrHistogramError(null);
     setEonrHistogramLoading(false);
-    setTrialsNPrice(0.65);
-    setTrialsCornPrice(4.5);
     setSelectedRegionMapColor(null);
 
     if (continueTimerRef.current !== null) {
@@ -1247,13 +1253,10 @@ export default function Home() {
 
   useEffect(() => {
     if (resultsSection === 'optimize') {
-      setSelectedCountyName(null);
-      setSelectedCountyRegion(null);
       setCountiesMapError(null);
       setEonrHistogramBins([]);
       setEonrHistogramError(null);
       setEonrHistogramLoading(false);
-      setSelectedRegionMapColor(null);
     }
   }, [resultsSection]);
 
@@ -1273,8 +1276,8 @@ export default function Home() {
       try {
         const params = new URLSearchParams({
           region: trialsRegionApiParam.toLowerCase(),
-          nitro_price: String(trialsNPrice),
-          grain_price: String(trialsCornPrice),
+          nitro_price: String(nPrice),
+          grain_price: String(cornPrice),
         });
         const res = await fetch(`/api/onfarmtrials/eonr_count?${params.toString()}`, {
           signal: controller.signal,
@@ -1298,7 +1301,7 @@ export default function Home() {
     })();
 
     return () => controller.abort();
-  }, [showDashboard, showAONR, resultsSection, trialsRegionApiParam, trialsNPrice, trialsCornPrice]);
+  }, [showDashboard, showAONR, resultsSection, trialsRegionApiParam, nPrice, cornPrice]);
 
   /** Cold-start hint only after 3s waiting on this request (not tied to Continue). */
   useEffect(() => {
@@ -1547,7 +1550,7 @@ export default function Home() {
             >
             <h1 className="mb-6 max-w-4xl font-sans text-2xl font-black uppercase leading-tight tracking-tight text-[#CEB888] sm:mb-8 sm:text-3xl md:mb-10 md:text-5xl md:leading-[1.15] md:tracking-wide lg:text-6xl">
               <span className="block">Optimum nitrogen rate</span>
-              <span className="mt-2 block text-white md:mt-3">for maize</span>
+              <span className="mt-2 block text-white md:mt-3">for corn</span>
             </h1>
             {!showLocationOptions ? (
               <motion.button
@@ -1743,6 +1746,30 @@ export default function Home() {
                 )}
 
                 <div className="space-y-12 pb-32 lg:col-span-7">
+                  {showAONR && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <PriceInput
+                          label="N-Price ($/lb)"
+                          value={nPrice}
+                          min={0.2}
+                          max={1.5}
+                          step={0.01}
+                          onChange={setNPrice}
+                          color="accent-black"
+                        />
+                        <PriceInput
+                          label="Corn Price ($/bu)"
+                          value={cornPrice}
+                          min={3}
+                          max={10}
+                          step={0.1}
+                          onChange={setCornPrice}
+                          color="accent-green-600"
+                        />
+                      </div>
+                    </div>
+                  )}
                   <div ref={aonrRef} className="mb-4 flex flex-wrap justify-center gap-3">
                     <button
                       type="button"
@@ -1819,28 +1846,6 @@ export default function Home() {
                             )}
                           </div>
                           {!cellDataError && (
-                            <div className="mb-6 mt-6 grid gap-8 md:grid-cols-2">
-                              <PriceInput
-                                label="N-Price ($/lb)"
-                                value={nPrice}
-                                min={0.2}
-                                max={1.5}
-                                step={0.01}
-                                onChange={setNPrice}
-                                color="accent-black"
-                              />
-                              <PriceInput
-                                label="Corn Price ($/bu)"
-                                value={cornPrice}
-                                min={3}
-                                max={10}
-                                step={0.1}
-                                onChange={setCornPrice}
-                                color="accent-green-600"
-                              />
-                            </div>
-                          )}
-                          {!cellDataError && (
                             <ul className="list-disc space-y-1 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
                               <li>
                                 <span className="font-semibold text-slate-900">EONR</span>{' '}
@@ -1890,7 +1895,7 @@ export default function Home() {
                                     aria-hidden
                                   />
                                   <p className="text-center text-sm font-medium text-slate-600">
-                                    Loading EONR trial counts for region {trialsRegionApiParam}…
+                                    Loading EONR trial counts for region {trialsRegionDisplayLabel}…
                                   </p>
                                 </div>
                               )}
@@ -1913,7 +1918,7 @@ export default function Home() {
                                 <div className="relative">
                                   <EonrHistogramChart
                                     bins={eonrHistogramBins}
-                                    regionLabel={trialsRegionApiParam}
+                                    regionLabel={trialsRegionDisplayLabel ?? trialsRegionApiParam}
                                     isMobile={isMobile}
                                     accentHex={selectedRegionMapColor ?? DEFAULT_HISTOGRAM_ACCENT}
                                   />
@@ -1929,28 +1934,6 @@ export default function Home() {
                                       />
                                     </div>
                                   )}
-                                </div>
-                              )}
-                              {!countiesMapError && (
-                                <div className="mt-6 grid gap-6 md:grid-cols-2">
-                                  <PriceInput
-                                    label="N-Price ($/lb)"
-                                    value={trialsNPrice}
-                                    min={0.2}
-                                    max={1.5}
-                                    step={0.01}
-                                    onChange={setTrialsNPrice}
-                                    color="accent-black"
-                                  />
-                                  <PriceInput
-                                    label="Corn Price ($/bu)"
-                                    value={trialsCornPrice}
-                                    min={3}
-                                    max={10}
-                                    step={0.1}
-                                    onChange={setTrialsCornPrice}
-                                    color="accent-green-600"
-                                  />
                                 </div>
                               )}
                             </div>
