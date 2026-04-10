@@ -1037,6 +1037,157 @@ function EonrHistogramEmptyChart({ isMobile }: { isMobile: boolean }) {
   );
 }
 
+/** Darker Purdue header gold (#CEB888) — paired EONR / price panels share the same tone. */
+const PURDUE_HEADER_BEIGE_PANEL =
+  'linear-gradient(165deg, #d2bc88 0%, #CEB888 45%, #b89452 100%)';
+
+const GAUGE_TRACK = '#44403c';
+const GAUGE_FILL = '#0c0a09';
+const GAUGE_TICK_DIM = 'rgba(12, 10, 9, 0.38)';
+const GAUGE_READOUT = '#0c0a09';
+
+/** F1-style arched gauge for EONR: dark arc on beige, high-contrast readout. */
+function EonrTachometerGauge({
+  eonrLbAc,
+  minRate,
+  maxRate,
+  isMobile,
+}: {
+  eonrLbAc: number | null;
+  minRate: number;
+  maxRate: number;
+  isMobile: boolean;
+}) {
+  const cx = 200;
+  const cy = 170;
+  const rOuter = 88;
+  const rInnerTicks = 74;
+  const arcPath = `M ${cx - rOuter} ${cy} A ${rOuter} ${rOuter} 0 1 1 ${cx + rOuter} ${cy}`;
+  const arcLen = Math.PI * rOuter;
+  const progress =
+    eonrLbAc === null
+      ? 0
+      : Math.max(0, Math.min(1, (eonrLbAc - minRate) / Math.max(maxRate - minRate, 1e-6)));
+  const dashFill = arcLen * progress;
+
+  const tickAngles = useMemo(() => {
+    const n = 14;
+    const out: { x1: number; y1: number; x2: number; y2: number; inFilled: boolean }[] = [];
+    for (let i = 0; i < n; i++) {
+      const t = i / (n - 1);
+      const θ = Math.PI * (1 - t);
+      const xo = cx + rOuter * Math.cos(θ);
+      const yo = cy - rOuter * Math.sin(θ);
+      const xi = cx + rInnerTicks * Math.cos(θ);
+      const yi = cy - rInnerTicks * Math.sin(θ);
+      out.push({
+        x1: xo,
+        y1: yo,
+        x2: xi,
+        y2: yi,
+        inFilled: t <= progress + 1e-6,
+      });
+    }
+    return out;
+  }, [progress]);
+
+  const mainText = eonrLbAc === null ? '—' : `${eonrLbAc.toFixed(1)} lb`;
+  const fontSizeMain = isMobile ? 26 : 34;
+
+  const uid = useId().replace(/:/g, '');
+  const filterGlow = `eonrTachGlow-${uid}`;
+  const filterText = `eonrTextSoft-${uid}`;
+
+  return (
+    <div className="relative w-full min-w-0 text-left">
+        <p className="mb-0 text-left text-[11px] font-black uppercase leading-tight tracking-[0.14em] text-stone-950 sm:text-xs">
+          EONR{' '}
+          <span className="font-semibold normal-case tracking-normal text-stone-900">
+            (Economic Optimum Nitrogen Rate)
+          </span>
+        </p>
+        <svg
+          viewBox="0 0 400 182"
+          className="h-auto w-full max-h-[142px]"
+          role="img"
+          aria-label={
+            eonrLbAc === null
+              ? 'Economic optimum nitrogen rate gauge'
+              : `Economic optimum nitrogen rate ${eonrLbAc.toFixed(1)} lb`
+          }
+        >
+          <defs>
+            <filter id={filterGlow} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="1.4" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id={filterText} x="-25%" y="-25%" width="150%" height="150%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="0.6" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Track (unfilled arc) */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={GAUGE_TRACK}
+            strokeOpacity={0.55}
+            strokeWidth={11}
+            strokeLinecap="round"
+          />
+          {/* Filled progress arc */}
+          <path
+            d={arcPath}
+            fill="none"
+            stroke={GAUGE_FILL}
+            strokeWidth={9.5}
+            strokeLinecap="round"
+            strokeDasharray={`${dashFill} ${arcLen}`}
+            filter={`url(#${filterGlow})`}
+          />
+
+          {/* Segmented ticks */}
+          {tickAngles.map((seg, i) => (
+            <line
+              key={i}
+              x1={seg.x1}
+              y1={seg.y1}
+              x2={seg.x2}
+              y2={seg.y2}
+              stroke={seg.inFilled ? GAUGE_FILL : GAUGE_TICK_DIM}
+              strokeWidth={seg.inFilled ? 2.1 : 1.4}
+              strokeLinecap="round"
+            />
+          ))}
+
+          {/* Center readout */}
+          <text
+            x={cx}
+            y={cy + 4}
+            textAnchor="middle"
+            fill={GAUGE_READOUT}
+            style={{
+              fontSize: fontSizeMain,
+              fontWeight: 600,
+              fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              letterSpacing: '-0.03em',
+            }}
+            filter={`url(#${filterText})`}
+          >
+            {mainText}
+          </text>
+        </svg>
+    </div>
+  );
+}
+
 let cellsGeoJsonCache: FeatureCollection | null = null;
 
 async function loadCellsGeoJson(): Promise<FeatureCollection> {
@@ -1398,10 +1549,13 @@ export default function Home() {
   }, [cellSimulations, nPrice, cornPrice]);
   const priceRatio = useMemo(() => (cornPrice > 0 ? nPrice / cornPrice : null), [nPrice, cornPrice]);
 
-  const formatNitrogenRate = (row: SimulationResult | null) => {
-    if (!row) return 'N/A';
-    return `${row.nitroLbAc.toFixed(1)} lb/ac`;
-  };
+  const eonrGaugeScale = useMemo(() => {
+    const min = 0;
+    if (!cellSimulations?.length) return { min, max: 350 };
+    const maxN = Math.max(350, ...cellSimulations.map((r) => r.nitroLbAc));
+    return { min, max: maxN };
+  }, [cellSimulations]);
+
   const handleMapInteraction = () => {
     if (showAONR) return;
 
@@ -1846,17 +2000,31 @@ export default function Home() {
                             )}
                           </div>
                           {!cellDataError && (
-                            <ul className="list-disc space-y-1 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 text-sm text-slate-700">
-                              <li>
-                                <span className="font-semibold text-slate-900">EONR</span>{' '}
-                                <span className="text-emerald-800">(economic optimum):</span>{' '}
-                                {formatNitrogenRate(eonrRow)}
-                              </li>
-                              <li>
-                                <span className="font-semibold text-slate-900">Price ratio (N/Corn):</span>{' '}
-                                {priceRatio === null ? 'N/A' : priceRatio.toFixed(3)}
-                              </li>
-                            </ul>
+                            <div className="mt-4 grid grid-cols-1 gap-2 sm:mt-5 sm:grid-cols-2 sm:gap-2">
+                              <div
+                                className="flex min-h-[132px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[138px] sm:p-2.5"
+                                style={{ background: PURDUE_HEADER_BEIGE_PANEL }}
+                              >
+                                <EonrTachometerGauge
+                                  eonrLbAc={eonrRow?.nitroLbAc ?? null}
+                                  minRate={eonrGaugeScale.min}
+                                  maxRate={eonrGaugeScale.max}
+                                  isMobile={isMobile}
+                                />
+                              </div>
+                              <div
+                                className="flex min-h-[132px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[138px] sm:p-2.5"
+                                style={{ background: PURDUE_HEADER_BEIGE_PANEL }}
+                              >
+                                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950">
+                                  Price ratio
+                                </p>
+                                <p className="mt-0.5 text-xs font-medium text-stone-900">N / Corn</p>
+                                <p className="mt-1.5 border-t border-black/15 pt-1.5 font-mono text-[1.2rem] font-semibold leading-none tracking-tight text-stone-950 tabular-nums sm:text-[1.3rem]">
+                                  {priceRatio === null ? '—' : priceRatio.toFixed(3)}
+                                </p>
+                              </div>
+                            </div>
                           )}
                         </div>
                       ) : (
@@ -2198,6 +2366,7 @@ function DualAxisNitrogenChart({
     .join(' ');
 
   const eonrPt = eonrX !== null ? interpolateDualAtX(points, eonrX) : null;
+  const aonrPt = aonrX !== null ? interpolateDualAtX(points, aonrX) : null;
 
   const hoveredPoint =
     hoverIndex !== null && hoverIndex >= 0 && hoverIndex < points.length
@@ -2324,19 +2493,6 @@ function DualAxisNitrogenChart({
           );
         })}
 
-        {!hideCurve && aonrX !== null && (
-          <line
-            x1={sx(aonrX)}
-            x2={sx(aonrX)}
-            y1={padTop}
-            y2={height - padBottom}
-            stroke="#94a3b8"
-            strokeWidth={isMobile ? 26 : 34}
-            strokeOpacity={0.2}
-            strokeLinecap="butt"
-          />
-        )}
-
         {!hideCurve && (
           <>
             <path
@@ -2356,6 +2512,16 @@ function DualAxisNitrogenChart({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
+            {aonrX !== null && aonrPt && (
+              <circle
+                cx={sx(aonrX)}
+                cy={syYield(aonrPt.yield)}
+                r={isMobile ? 6.5 : 7.5}
+                fill="#3b82f6"
+                stroke="#ffffff"
+                strokeWidth={2.5}
+              />
+            )}
             {eonrX !== null && eonrPt && (
               <g>
                 <line
@@ -2486,8 +2652,11 @@ function DualAxisNitrogenChart({
             Profit (EONR highlighted)
           </span>
           <span className="inline-flex items-center gap-2">
-            <span className="h-3 w-6 rounded-sm bg-blue-300/70" aria-hidden />
-            Yield (AONR zone shaded)
+            <span
+              className="h-3 w-3 shrink-0 rounded-full border-2 border-white bg-blue-500 shadow-sm"
+              aria-hidden
+            />
+            Yield (AONR point)
           </span>
         </div>
       )}
