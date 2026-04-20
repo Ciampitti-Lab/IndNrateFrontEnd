@@ -183,7 +183,12 @@ function CellsLayer({
   const getCellId = (feature: unknown): number | null => {
     const f = feature as { properties?: { id_cell?: unknown } };
     const id = f.properties?.id_cell;
-    return typeof id === 'number' ? id : null;
+    if (typeof id === 'number' && Number.isFinite(id)) return id;
+    if (typeof id === 'string') {
+      const parsed = Number(id);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
   };
 
   return (
@@ -200,6 +205,7 @@ function CellsLayer({
               bringToFront?: () => void;
             };
             const cellId = getCellId(feature);
+            if (cellId === null) return;
             onSelectCell(cellId);
             l.setStyle?.(selectedStyle);
             l.bringToFront?.();
@@ -387,15 +393,22 @@ function CountiesLayer({
 }
 
 type SimulationResult = {
-  nitroKgHa: number;
-  yieldKgHa: number;
+  nitroKgHa: number | null;
+  yieldKgHa: number | null;
   nitroLbAc: number;
-  yieldBsAc: number;
-  profitDol: number;
+  yieldBsAc: number | null;
+  profitDol: number | null;
 };
 
 const toNumber = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
+  typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : typeof value === 'string'
+      ? (() => {
+          const n = Number(value.trim());
+          return Number.isFinite(n) ? n : null;
+        })()
+      : null;
 
 const pickNumber = (row: Record<string, unknown>, keys: string[]): number | null => {
   for (const key of keys) {
@@ -413,9 +426,10 @@ const normalizeSimulation = (raw: unknown): SimulationResult | null => {
   const yieldKgHa = pickNumber(row, ['yield_kg_ha', 'YieldKgHa']);
   const nitroLbAc = pickNumber(row, ['nitro_lb_ac', 'NitroLbAc']);
   const yieldBsAc = pickNumber(row, ['yield_bs_ac', 'YieldBsAc']);
-  const profitDol = pickNumber(row, ['profit_dol', 'Profit_dol', 'ProfitDol']);
+  const profitDol = pickNumber(row, ['profit_dol', 'Profit_dol', 'ProfitDol', 'profit']);
 
-  if (nitroKgHa === null || yieldKgHa === null || nitroLbAc === null || yieldBsAc === null) {
+  // Keep row if N-rate exists. Profit can be computed later from yield+prices if provided.
+  if (nitroLbAc === null) {
     return null;
   }
 
@@ -424,7 +438,7 @@ const normalizeSimulation = (raw: unknown): SimulationResult | null => {
     yieldKgHa,
     nitroLbAc,
     yieldBsAc,
-    profitDol: profitDol ?? 0,
+    profitDol,
   };
 };
 
@@ -1108,7 +1122,7 @@ function EonrTachometerGauge({
         </p>
         <svg
           viewBox="0 0 400 182"
-          className="h-auto w-full max-h-[142px]"
+          className="h-auto w-full max-h-[128px]"
           role="img"
           aria-label={
             eonrLbAc === null
@@ -1265,8 +1279,6 @@ export default function Home() {
   const [loadingWakeMessageIndex, setLoadingWakeMessageIndex] = useState(0);
   const [nPrice, setNPrice] = useState(0.65);
   const [cornPrice, setCornPrice] = useState(4.5);
-  const simRequestPricesRef = useRef({ nPrice, cornPrice });
-  simRequestPricesRef.current = { nPrice, cornPrice };
   const [showLocationOptions, setShowLocationOptions] = useState(false);
   const [resultsSection, setResultsSection] = useState<'optimize' | 'trials'>('optimize');
   const [mobileTrialsView, setMobileTrialsView] = useState<'map' | 'results'>('map');
@@ -1485,11 +1497,10 @@ export default function Home() {
     }
 
     const controller = new AbortController();
-    const { nPrice: nP, cornPrice: cP } = simRequestPricesRef.current;
     const params = new URLSearchParams({
       cell: String(selectedCellId),
-      nitro_price: String(nP),
-      grain_price: String(cP),
+      nitro_price: String(nPrice),
+      grain_price: String(cornPrice),
     });
 
     setCellDataLoading(true);
@@ -1521,33 +1532,47 @@ export default function Home() {
     })();
 
     return () => controller.abort();
-  }, [selectedCellId]);
+  }, [selectedCellId, nPrice, cornPrice]);
 
   const dualCurveData = useMemo(() => {
     if (!cellSimulations || cellSimulations.length === 0) return [];
     return cellSimulations
       .map((row) => ({
         x: row.nitroLbAc,
-        yield: row.yieldBsAc,
-        profit: cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc,
+        yield: row.yieldBsAc ?? 0,
+        profit:
+          row.profitDol ??
+          (row.yieldBsAc !== null ? cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc : null),
       }))
+      .filter((row): row is { x: number; yield: number; profit: number } => row.profit !== null)
       .sort((a, b) => a.x - b.x);
   }, [cellSimulations, nPrice, cornPrice]);
-  const aonrRow = useMemo(() => {
-    if (!cellSimulations || cellSimulations.length === 0) return null;
-    return cellSimulations.reduce((best, row) =>
-      row.yieldBsAc > best.yieldBsAc ? row : best
-    );
-  }, [cellSimulations]);
   const eonrRow = useMemo(() => {
     if (!cellSimulations || cellSimulations.length === 0) return null;
     return cellSimulations.reduce((best, row) => {
-      const bestMargin = cornPrice * best.yieldBsAc - nPrice * best.nitroLbAc;
-      const rowMargin = cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc;
-      return rowMargin > bestMargin ? row : best;
+      const bestProfit =
+        best.profitDol ??
+        (best.yieldBsAc !== null ? cornPrice * best.yieldBsAc - nPrice * best.nitroLbAc : Number.NEGATIVE_INFINITY);
+      const rowProfit =
+        row.profitDol ??
+        (row.yieldBsAc !== null ? cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc : Number.NEGATIVE_INFINITY);
+      return rowProfit > bestProfit ? row : best;
     });
   }, [cellSimulations, nPrice, cornPrice]);
   const priceRatio = useMemo(() => (cornPrice > 0 ? nPrice / cornPrice : null), [nPrice, cornPrice]);
+
+  /** Same ±$1/ac profit band as the gray region on the economic curve (profit ≥ peak − $1/ac). */
+  const eonrProfitBandSummary = useMemo(() => {
+    if (!eonrRow || dualCurveData.length < 2) return null;
+    const eonrPt = interpolateDualAtX(dualCurveData, eonrRow.nitroLbAc);
+    if (!eonrPt || !Number.isFinite(eonrPt.profit)) return null;
+    const peakProfit = eonrPt.profit;
+    const intervals = profitAtLeastIntervals(dualCurveData, peakProfit - 1);
+    if (intervals.length === 0) return null;
+    const nLow = Math.min(...intervals.map((seg) => seg[0]));
+    const nHigh = Math.max(...intervals.map((seg) => seg[1]));
+    return { nLow, nHigh };
+  }, [dualCurveData, eonrRow]);
 
   const eonrGaugeScale = useMemo(() => {
     const min = 0;
@@ -1968,7 +1993,6 @@ export default function Home() {
                               : PREVIEW_DUAL_POINTS
                           }
                           eonrX={null}
-                          aonrX={null}
                           isMobile={false}
                           hideCurve
                         />
@@ -1988,7 +2012,6 @@ export default function Home() {
                               <DualAxisNitrogenChart
                                 points={dualCurveData}
                                 eonrX={eonrRow?.nitroLbAc ?? null}
-                                aonrX={aonrRow?.nitroLbAc ?? null}
                                 isMobile={isMobile}
                               />
                             )}
@@ -2002,7 +2025,7 @@ export default function Home() {
                           {!cellDataError && (
                             <div className="mt-4 grid grid-cols-1 gap-2 sm:mt-5 sm:grid-cols-2 sm:gap-2">
                               <div
-                                className="flex min-h-[132px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[138px] sm:p-2.5"
+                                className="flex min-h-[118px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[124px] sm:p-2.5"
                                 style={{ background: PURDUE_HEADER_BEIGE_PANEL }}
                               >
                                 <EonrTachometerGauge
@@ -2013,7 +2036,7 @@ export default function Home() {
                                 />
                               </div>
                               <div
-                                className="flex min-h-[132px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[138px] sm:p-2.5"
+                                className="flex min-h-[118px] min-w-0 flex-col justify-center rounded-2xl border border-black/15 p-2 text-right shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_3px_rgba(0,0,0,0.12)] sm:min-h-[124px] sm:p-2.5"
                                 style={{ background: PURDUE_HEADER_BEIGE_PANEL }}
                               >
                                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-950">
@@ -2023,6 +2046,22 @@ export default function Home() {
                                 <p className="mt-1.5 border-t border-black/15 pt-1.5 font-mono text-[1.2rem] font-semibold leading-none tracking-tight text-stone-950 tabular-nums sm:text-[1.3rem]">
                                   {priceRatio === null ? '—' : priceRatio.toFixed(3)}
                                 </p>
+                                {eonrProfitBandSummary && (
+                                  <dl className="mt-2 space-y-1 border-t border-black/15 pt-2 text-left text-[11px] text-stone-800">
+                                    <div className="flex justify-between gap-2">
+                                      <dt className="shrink-0 text-stone-600">Lower bound (N)</dt>
+                                      <dd className="font-mono tabular-nums text-stone-950">
+                                        {eonrProfitBandSummary.nLow.toFixed(1)} lb/ac
+                                      </dd>
+                                    </div>
+                                    <div className="flex justify-between gap-2">
+                                      <dt className="shrink-0 text-stone-600">Upper bound (N)</dt>
+                                      <dd className="font-mono tabular-nums text-stone-950">
+                                        {eonrProfitBandSummary.nHigh.toFixed(1)} lb/ac
+                                      </dd>
+                                    </div>
+                                  </dl>
+                                )}
                               </div>
                             </div>
                           )}
@@ -2239,6 +2278,47 @@ function interpolateDualAtX(points: DualRatePoint[], x: number): DualRatePoint |
   return null;
 }
 
+/** X-intervals where piecewise-linear profit is at least `threshold` (e.g. max profit − $1/ac). */
+function profitAtLeastIntervals(points: DualRatePoint[], threshold: number): [number, number][] {
+  if (points.length < 2) return [];
+  const raw: [number, number][] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    const { x: xa, profit: pa } = a;
+    const { x: xb, profit: pb } = b;
+    const denom = pb - pa;
+    const eps = 1e-9;
+
+    if (pa >= threshold && pb >= threshold) {
+      raw.push([xa, xb]);
+      continue;
+    }
+    if (pa < threshold && pb < threshold) continue;
+
+    if (Math.abs(denom) < eps) continue;
+    const tCross = (threshold - pa) / denom;
+    const xCross = xa + tCross * (xb - xa);
+
+    if (pa >= threshold && pb < threshold) {
+      raw.push([Math.min(xa, xCross), Math.max(xa, xCross)]);
+    } else if (pa < threshold && pb >= threshold) {
+      raw.push([Math.min(xb, xCross), Math.max(xb, xCross)]);
+    }
+  }
+
+  if (raw.length === 0) return [];
+  raw.sort((u, v) => u[0] - v[0]);
+  const merged: [number, number][] = [raw[0]!];
+  for (let k = 1; k < raw.length; k++) {
+    const cur = raw[k]!;
+    const last = merged[merged.length - 1]!;
+    if (cur[0] <= last[1] + 1e-6) last[1] = Math.max(last[1], cur[1]);
+    else merged.push(cur);
+  }
+  return merged;
+}
+
 function sampleDualPoints(points: DualRatePoint[], count: number): DualRatePoint[] {
   if (points.length === 0) return [];
   if (points.length === 1) return Array.from({ length: count }, () => points[0]!);
@@ -2263,7 +2343,6 @@ function sampleDualPoints(points: DualRatePoint[], count: number): DualRatePoint
 type DualAxisNitrogenChartProps = {
   points: DualRatePoint[];
   eonrX: number | null;
-  aonrX: number | null;
   isMobile: boolean;
   hideCurve?: boolean;
 };
@@ -2271,7 +2350,6 @@ type DualAxisNitrogenChartProps = {
 function DualAxisNitrogenChart({
   points,
   eonrX,
-  aonrX,
   isMobile,
   hideCurve = false,
 }: DualAxisNitrogenChartProps) {
@@ -2329,7 +2407,6 @@ function DualAxisNitrogenChart({
   const padTop = isMobile ? 18 : 22;
   const padBottom = isMobile ? 62 : 56;
   const profitTickX = padLeft - (isMobile ? 10 : 8);
-  const yieldTickX = width - padRight + (isMobile ? 6 : 8);
 
   if (animatedPoints.length < 2) return null;
 
@@ -2338,35 +2415,28 @@ function DualAxisNitrogenChart({
   const xMin = 0;
   const profitMinRaw = Math.min(...animatedPoints.map((p) => p.profit));
   const profitMaxRaw = Math.max(...animatedPoints.map((p) => p.profit));
-  const yieldMinRaw = Math.min(...animatedPoints.map((p) => p.yield));
-  const yieldMaxRaw = Math.max(...animatedPoints.map((p) => p.yield));
 
   const profitPad = Math.max((profitMaxRaw - profitMinRaw) * 0.08, 1);
-  const yieldPad = Math.max((yieldMaxRaw - yieldMinRaw) * 0.08, 1);
   const profitMin = profitMinRaw - profitPad;
   const profitMax = profitMaxRaw + profitPad;
-  const yieldMin = Math.max(0, yieldMinRaw - yieldPad);
-  const yieldMax = yieldMaxRaw + yieldPad;
   const profitRange = profitMax - profitMin || 1;
-  const yieldRange = yieldMax - yieldMin || 1;
   const xRange = xMax - xMin || 1;
   const plotH = height - padTop - padBottom;
 
   const sx = (x: number) => padLeft + ((x - xMin) / xRange) * (width - padLeft - padRight);
   const syProfit = (v: number) =>
     height - padBottom - ((v - profitMin) / profitRange) * plotH;
-  const syYield = (v: number) =>
-    height - padBottom - ((v - yieldMin) / yieldRange) * plotH;
 
   const pathProfit = animatedPoints
     .map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(2)} ${syProfit(p.profit).toFixed(2)}`)
     .join(' ');
-  const pathYield = animatedPoints
-    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(2)} ${syYield(p.yield).toFixed(2)}`)
-    .join(' ');
 
   const eonrPt = eonrX !== null ? interpolateDualAtX(points, eonrX) : null;
-  const aonrPt = aonrX !== null ? interpolateDualAtX(points, aonrX) : null;
+  const profitBandDelta = 1;
+  const eonrProfitBandIntervals =
+    !hideCurve && eonrX !== null && eonrPt !== null && points.length >= 2
+      ? profitAtLeastIntervals(points, eonrPt.profit - profitBandDelta)
+      : [];
 
   const hoveredPoint =
     hoverIndex !== null && hoverIndex >= 0 && hoverIndex < points.length
@@ -2402,7 +2472,7 @@ function DualAxisNitrogenChart({
         viewBox={`0 0 ${width} ${height}`}
         className="h-auto w-full cursor-crosshair"
         role="img"
-        aria-label="Nitrogen response: profit and yield versus nitrogen rate"
+        aria-label="Economic nitrogen response: profit versus nitrogen rate"
         onMouseMove={hideCurve ? undefined : handleMouseMove}
         onMouseLeave={() => (hideCurve ? null : setHoverIndex(null))}
       >
@@ -2422,15 +2492,6 @@ function DualAxisNitrogenChart({
           stroke="#94a3b8"
           strokeWidth="1.5"
         />
-        <line
-          x1={width - padRight}
-          y1={padTop}
-          x2={width - padRight}
-          y2={height - padBottom}
-          stroke="#cbd5e1"
-          strokeWidth="1"
-        />
-
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
           const profitVal = profitMin + t * profitRange;
           const yPos = syProfit(profitVal);
@@ -2449,22 +2510,6 @@ function DualAxisNitrogenChart({
                 ${profitVal.toFixed(0)}
               </text>
             </g>
-          );
-        })}
-
-        {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-          const yieldVal = yieldMin + t * yieldRange;
-          const yPos = syYield(yieldVal);
-          return (
-            <text
-              key={`y-${t}`}
-              x={yieldTickX}
-              y={yPos + 4}
-              textAnchor="start"
-              className={labelCls}
-            >
-              {yieldVal.toFixed(0)}
-            </text>
           );
         })}
 
@@ -2495,15 +2540,17 @@ function DualAxisNitrogenChart({
 
         {!hideCurve && (
           <>
-            <path
-              d={pathYield}
-              fill="none"
-              stroke="#93c5fd"
-              strokeWidth={5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              opacity={0.45}
-            />
+            {eonrProfitBandIntervals.map(([xL, xR], idx) => (
+              <rect
+                key={`eonr-profit-band-${idx}`}
+                x={sx(xL)}
+                y={padTop}
+                width={Math.max(0, sx(xR) - sx(xL))}
+                height={plotH}
+                fill="#64748b"
+                fillOpacity={0.2}
+              />
+            ))}
             <path
               d={pathProfit}
               fill="none"
@@ -2512,16 +2559,6 @@ function DualAxisNitrogenChart({
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            {aonrX !== null && aonrPt && (
-              <circle
-                cx={sx(aonrX)}
-                cy={syYield(aonrPt.yield)}
-                r={isMobile ? 6.5 : 7.5}
-                fill="#3b82f6"
-                stroke="#ffffff"
-                strokeWidth={2.5}
-              />
-            )}
             {eonrX !== null && eonrPt && (
               <g>
                 <line
@@ -2563,14 +2600,6 @@ function DualAxisNitrogenChart({
                   stroke="#16a34a"
                   strokeWidth="2"
                 />
-                <circle
-                  cx={sx(hoveredPoint.x)}
-                  cy={syYield(hoveredPoint.yield)}
-                  r="5"
-                  fill="#ffffff"
-                  stroke="#3b82f6"
-                  strokeWidth="2"
-                />
               </>
             )}
 
@@ -2598,13 +2627,6 @@ function DualAxisNitrogenChart({
                 >
                   Profit: ${hoveredPoint.profit.toFixed(1)}/ac
                 </text>
-                <text
-                  x={Math.min(width - 230, sx(hoveredPoint.x) + 18)}
-                  y={Math.max(padTop + 54, syProfit(hoveredPoint.profit) - 8)}
-                  className={isMobile ? 'fill-blue-200 text-[13px]' : 'fill-blue-200 text-[11px]'}
-                >
-                  Yield: {hoveredPoint.yield.toFixed(1)} bu/ac
-                </text>
               </g>
             )}
           </>
@@ -2631,19 +2653,6 @@ function DualAxisNitrogenChart({
         >
           Profit ($/ac)
         </text>
-        <text
-          x={isMobile ? width - 11 : width - 20}
-          y={height / 2}
-          transform={`rotate(-90 ${isMobile ? width - 11 : width - 20} ${height / 2})`}
-          textAnchor="middle"
-          className={
-            isMobile
-              ? 'fill-blue-800 text-[9px] font-semibold tracking-tight'
-              : 'fill-blue-800 text-[12px] font-semibold'
-          }
-        >
-          Yield (bu/ac)
-        </text>
       </svg>
       {!hideCurve && (
         <div className="flex flex-wrap justify-center gap-4 px-2 pb-2 text-[11px] text-slate-600 sm:text-xs">
@@ -2653,10 +2662,10 @@ function DualAxisNitrogenChart({
           </span>
           <span className="inline-flex items-center gap-2">
             <span
-              className="h-3 w-3 shrink-0 rounded-full border-2 border-white bg-blue-500 shadow-sm"
+              className="h-3 w-6 rounded-sm border border-slate-400/70 bg-slate-400/25"
               aria-hidden
             />
-            Yield (AONR point)
+            N rates within $1/ac of max profit
           </span>
         </div>
       )}
