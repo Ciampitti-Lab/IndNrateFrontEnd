@@ -24,3 +24,42 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.dynamic-date-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  height: 20px;
+}
+
+.dynamic-date-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  background: transparent;
+}
+
+.dynamic-date-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #166534;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  margin-top: -12px;
+}
+
+.dynamic-date-slider::-moz-range-track {
+  height: 8px;
+  background: transparent;
+}
+
+.dynamic-date-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  background: #166534;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  transform: translateY(-9px);
+}

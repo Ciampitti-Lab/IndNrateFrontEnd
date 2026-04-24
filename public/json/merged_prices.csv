@@ -1,0 +1,137 @@
+,date,source,nitro_price_lb,corn_price_bu
+0,2025-01-06,Urea,0.24,4.25
+1,2025-01-06,Anhydrous Ammonia,0.33,4.25
+2,2025-01-06,Liquid Nitrogen 28,0.15,4.25
+3,2025-01-06,Liquid Nitrogen 32,0.15,4.25
+4,2025-01-20,Urea,0.24,4.55
+5,2025-01-20,Anhydrous Ammonia,0.33,4.55
+6,2025-01-20,Liquid Nitrogen 28,0.15,4.55
+7,2025-01-20,Liquid Nitrogen 32,0.15,4.55
+8,2025-02-03,Liquid Nitrogen 32,0.15,4.51
+9,2025-02-03,Liquid Nitrogen 28,0.16,4.51
+10,2025-02-03,Urea,0.25,4.51
+11,2025-02-03,Anhydrous Ammonia,0.34,4.51
+12,2025-02-17,Urea,0.25,4.67
+13,2025-02-17,Anhydrous Ammonia,0.34,4.67
+14,2025-02-17,Liquid Nitrogen 28,0.16,4.67
+15,2025-02-17,Liquid Nitrogen 32,0.15,4.67
+16,2025-03-03,Liquid Nitrogen 32,0.15,4.32
+17,2025-03-03,Liquid Nitrogen 28,0.16,4.32
+18,2025-03-03,Urea,0.25,4.32
+19,2025-03-03,Anhydrous Ammonia,0.34,4.32
+20,2025-03-17,Urea,0.26,4.26
+21,2025-03-17,Anhydrous Ammonia,0.36,4.26
+22,2025-03-17,Liquid Nitrogen 28,0.17,4.26
+23,2025-03-17,Liquid Nitrogen 32,0.17,4.26
+24,2025-03-31,Urea,0.26,4.25
+25,2025-03-31,Anhydrous Ammonia,0.36,4.25
+26,2025-03-31,Liquid Nitrogen 28,0.17,4.25
+27,2025-03-31,Liquid Nitrogen 32,0.17,4.25
+28,2025-04-14,Urea,0.26,4.65
+29,2025-04-14,Anhydrous Ammonia,0.36,4.65
+30,2025-04-14,Liquid Nitrogen 28,0.17,4.65
+31,2025-04-14,Liquid Nitrogen 32,0.2,4.65
+32,2025-04-28,Liquid Nitrogen 32,0.2,4.57
+33,2025-04-28,Liquid Nitrogen 28,0.18,4.57
+34,2025-04-28,Urea,0.26,4.57
+35,2025-04-28,Anhydrous Ammonia,0.36,4.57
+36,2025-05-12,Urea,0.26,4.25
+37,2025-05-12,Anhydrous Ammonia,0.36,4.25
+38,2025-05-12,Liquid Nitrogen 28,0.19,4.25
+39,2025-05-12,Liquid Nitrogen 32,0.22,4.25
+40,2025-05-26,Urea,0.26,4.38
+41,2025-05-26,Anhydrous Ammonia,0.36,4.38
+42,2025-05-26,Liquid Nitrogen 28,0.19,4.38
+43,2025-05-26,Liquid Nitrogen 32,0.22,4.38
+44,2025-06-09,Liquid Nitrogen 32,0.22,4.23
+45,2025-06-09,Urea,0.26,4.23
+46,2025-06-09,Anhydrous Ammonia,0.36,4.23
+47,2025-06-09,Liquid Nitrogen 28,0.19,4.23
+48,2025-06-23,Liquid Nitrogen 32,0.22,4.1
+49,2025-06-23,Liquid Nitrogen 28,0.19,4.1
+50,2025-06-23,Anhydrous Ammonia,0.36,4.1
+51,2025-06-23,Urea,0.26,4.1
+52,2025-07-07,Urea,0.26,4.13
+53,2025-07-07,Anhydrous Ammonia,0.36,4.13
+54,2025-07-07,Liquid Nitrogen 28,0.19,4.13
+55,2025-07-07,Liquid Nitrogen 32,0.22,4.13
+56,2025-07-21,Liquid Nitrogen 32,0.22,3.99
+57,2025-07-21,Urea,0.26,3.99
+58,2025-07-21,Anhydrous Ammonia,0.36,3.99
+59,2025-07-21,Liquid Nitrogen 28,0.19,3.99
+60,2025-08-04,Liquid Nitrogen 28,0.2,3.78
+61,2025-08-04,Liquid Nitrogen 32,0.22,3.78
+62,2025-08-04,Urea,0.27,3.78
+63,2025-08-04,Anhydrous Ammonia,0.36,3.78
+64,2025-08-18,Liquid Nitrogen 28,0.2,3.7
+65,2025-08-18,Liquid Nitrogen 32,0.22,3.7
+66,2025-08-18,Urea,0.27,3.7
+67,2025-08-18,Anhydrous Ammonia,0.36,3.7
+68,2025-09-01,Urea,0.28,3.83
+69,2025-09-01,Anhydrous Ammonia,0.36,3.83
+70,2025-09-01,Liquid Nitrogen 28,0.2,3.83
+71,2025-09-01,Liquid Nitrogen 32,0.22,3.83
+72,2025-09-15,Urea,0.28,3.94
+73,2025-09-15,Anhydrous Ammonia,0.36,3.94
+74,2025-09-15,Liquid Nitrogen 28,0.2,3.94
+75,2025-09-15,Liquid Nitrogen 32,0.22,3.94
+76,2025-09-29,Urea,0.28,3.86
+77,2025-09-29,Anhydrous Ammonia,0.37,3.86
+78,2025-09-29,Liquid Nitrogen 28,0.2,3.86
+79,2025-09-29,Liquid Nitrogen 32,0.22,3.86
+80,2025-10-13,Liquid Nitrogen 28,0.2,3.81
+81,2025-10-13,Liquid Nitrogen 32,0.22,3.81
+82,2025-10-13,Urea,0.28,3.81
+83,2025-10-13,Anhydrous Ammonia,0.37,3.81
+84,2025-10-27,Urea,0.28,3.94
+85,2025-10-27,Anhydrous Ammonia,0.38,3.94
+86,2025-10-27,Liquid Nitrogen 28,0.2,3.94
+87,2025-10-27,Liquid Nitrogen 32,0.22,3.94
+88,2025-11-10,Liquid Nitrogen 28,0.2,4.01
+89,2025-11-10,Liquid Nitrogen 32,0.22,4.01
+90,2025-11-10,Urea,0.28,4.01
+91,2025-11-10,Anhydrous Ammonia,0.38,4.01
+92,2025-11-24,Urea,0.28,4.03
+93,2025-11-24,Anhydrous Ammonia,0.38,4.03
+94,2025-11-24,Liquid Nitrogen 28,0.2,4.03
+95,2025-11-24,Liquid Nitrogen 32,0.22,4.03
+96,2025-12-08,Urea,0.28,4.17
+97,2025-12-08,Anhydrous Ammonia,0.38,4.17
+98,2025-12-08,Liquid Nitrogen 28,0.2,4.17
+99,2025-12-08,Liquid Nitrogen 32,0.2,4.17
+100,2025-12-22,Liquid Nitrogen 32,0.2,4.17
+101,2025-12-22,Liquid Nitrogen 28,0.2,4.17
+102,2025-12-22,Urea,0.27,4.17
+103,2025-12-22,Anhydrous Ammonia,0.38,4.17
+104,2026-01-05,Urea,0.26,4.14
+105,2026-01-05,Anhydrous Ammonia,0.38,4.14
+106,2026-01-05,Liquid Nitrogen 28,0.2,4.14
+107,2026-01-05,Liquid Nitrogen 32,0.19,4.14
+108,2026-01-19,Urea,0.26,4.03
+109,2026-01-19,Anhydrous Ammonia,0.38,4.03
+110,2026-01-19,Liquid Nitrogen 28,0.2,4.03
+111,2026-01-19,Liquid Nitrogen 32,0.19,4.03
+112,2026-02-02,Urea,0.26,4.07
+113,2026-02-02,Anhydrous Ammonia,0.38,4.07
+114,2026-02-02,Liquid Nitrogen 28,0.2,4.07
+115,2026-02-02,Liquid Nitrogen 32,0.2,4.07
+116,2026-02-16,Liquid Nitrogen 32,0.2,4.13
+117,2026-02-16,Liquid Nitrogen 28,0.2,4.13
+118,2026-02-16,Anhydrous Ammonia,0.38,4.13
+119,2026-02-16,Urea,0.26,4.13
+120,2026-03-02,Urea,0.27,4.21
+121,2026-03-02,Anhydrous Ammonia,0.41,4.21
+122,2026-03-02,Liquid Nitrogen 28,0.2,4.21
+123,2026-03-02,Liquid Nitrogen 32,0.23,4.21
+124,2026-03-16,Urea,0.37,4.39
+125,2026-03-16,Anhydrous Ammonia,0.45,4.39
+126,2026-03-16,Liquid Nitrogen 28,0.22,4.39
+127,2026-03-16,Liquid Nitrogen 32,0.26,4.39
+128,2026-03-30,Urea,0.39,4.35
+129,2026-03-30,Anhydrous Ammonia,0.5,4.35
+130,2026-03-30,Liquid Nitrogen 28,0.23,4.35
+131,2026-03-30,Liquid Nitrogen 32,0.26,4.35
+132,2026-04-13,Anhydrous Ammonia,0.51,4.17
+133,2026-04-13,Liquid Nitrogen 28,0.24,4.17
+134,2026-04-13,Urea,0.41,4.17
+135,2026-04-13,Liquid Nitrogen 32,0.26,4.17
