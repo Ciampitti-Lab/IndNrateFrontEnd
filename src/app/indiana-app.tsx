@@ -721,53 +721,68 @@ function sliderTickLabelFromIsoDate(isoDate: string): string {
   });
 }
 
-function parseDynamicPriceDataset(rawCsv: string): DynamicPricePoint[] {
-  const rows = rawCsv
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
-  if (rows.length <= 1) return [];
-
-  const dateMap = new Map<
-    string,
-    { cornPrice: number | null; nitroBySource: Record<string, { sum: number; count: number }> }
-  >();
-  for (const line of rows.slice(1)) {
-    const parts = line.split(',');
-    if (parts.length < 5) continue;
-    const dateIso = parts[1]?.trim() ?? '';
-    const source = parts[2]?.trim() ?? '';
-    const nitro = Number(parts[3]?.trim() ?? '');
-    const corn = Number(parts[4]?.trim() ?? '');
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateIso)) continue;
-    if (!source) continue;
-    if (!Number.isFinite(nitro) || !Number.isFinite(corn)) continue;
-
-    const existing = dateMap.get(dateIso) ?? { cornPrice: null, nitroBySource: {} };
-    const sourceAgg = existing.nitroBySource[source] ?? { sum: 0, count: 0 };
-    sourceAgg.sum += nitro;
-    sourceAgg.count += 1;
-    existing.nitroBySource[source] = sourceAgg;
-    if (existing.cornPrice === null) existing.cornPrice = corn;
-    dateMap.set(dateIso, existing);
+function generateDynamicDateCandidates(startIso: string, endIso: string): string[] {
+  const start = new Date(`${startIso}T00:00:00Z`);
+  const end = new Date(`${endIso}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return [];
+  const out: string[] = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 14);
   }
+  return out;
+}
 
-  return Array.from(dateMap.entries())
-    .map(([dateIso, agg]) => ({
-      dateIso,
-      cornPrice: agg.cornPrice ?? 0,
-      nitroBySource: Object.fromEntries(
-        Object.entries(agg.nitroBySource)
-          .filter(([, v]) => v.count > 0)
-          .map(([src, v]) => [src, v.sum / v.count])
-      ),
-    }))
-    .filter((row) => {
-      if (!Number.isFinite(row.cornPrice)) return false;
-      if (Object.keys(row.nitroBySource).length === 0) return false;
-      return row.dateIso >= '2025-01-01' && row.dateIso <= '2026-04-30';
-    })
-    .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+const DEFAULT_NITRO_SOURCES = [
+  'Urea',
+  'Anhydrous Ammonia',
+  'Liquid Nitrogen 28',
+  'Liquid Nitrogen 32',
+] as const;
+
+function parseCornPricePayload(raw: unknown): number | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const price = pickNumber(row as Record<string, unknown>, ['corn_price_bu', 'corn_price', 'price']);
+    if (price !== null && Number.isFinite(price)) return price;
+  }
+  return null;
+}
+
+function parseNitroPricePayload(raw: unknown): number | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const price = pickNumber(row as Record<string, unknown>, ['nitro_price_lb', 'nitro_price', 'price']);
+    if (price !== null && Number.isFinite(price)) return price;
+  }
+  return null;
+}
+
+async function fetchJsonWithTimeout(
+  url: string,
+  signal: AbortSignal,
+  timeoutMs = 4000
+): Promise<unknown> {
+  const timeoutController = new AbortController();
+  const timeoutId = window.setTimeout(() => timeoutController.abort(), timeoutMs);
+  const onAbort = () => timeoutController.abort();
+  signal.addEventListener('abort', onAbort);
+  try {
+    const response = await fetch(url, {
+      signal: timeoutController.signal,
+      cache: 'no-store',
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeoutId);
+    signal.removeEventListener('abort', onAbort);
+  }
 }
 
 function parseHexRgb(hex: string): [number, number, number] | null {
@@ -1382,9 +1397,13 @@ export default function Home() {
   const [dynamicPriceRows, setDynamicPriceRows] = useState<DynamicPricePoint[]>([]);
   const [dynamicPriceLoading, setDynamicPriceLoading] = useState(false);
   const [dynamicPriceError, setDynamicPriceError] = useState<string | null>(null);
+  const [dynamicPriceLoadAttempted, setDynamicPriceLoadAttempted] = useState(false);
   const [dynamicDateIndex, setDynamicDateIndex] = useState(0);
   const [dynamicNitrogenSource, setDynamicNitrogenSource] = useState<string>('');
   const [dynamicSimulations, setDynamicSimulations] = useState<SimulationResult[] | null>(null);
+  const [dynamicCurvePricing, setDynamicCurvePricing] = useState<{ cornPrice: number; nitroPrice: number } | null>(
+    null
+  );
   const [dynamicCurveLoading, setDynamicCurveLoading] = useState(false);
   const [dynamicCurveError, setDynamicCurveError] = useState<string | null>(null);
   const [savedDynamicScenarios, setSavedDynamicScenarios] = useState<SavedDynamicScenario[]>([]);
@@ -1411,13 +1430,7 @@ export default function Home() {
     () => (dynamicPriceRows.length > 0 ? dynamicPriceRows[Math.min(dynamicDateIndex, dynamicPriceRows.length - 1)]! : null),
     [dynamicPriceRows, dynamicDateIndex]
   );
-  const dynamicNitrogenSources = useMemo(() => {
-    const src = new Set<string>();
-    for (const row of dynamicPriceRows) {
-      Object.keys(row.nitroBySource).forEach((s) => src.add(s));
-    }
-    return Array.from(src).sort((a, b) => a.localeCompare(b));
-  }, [dynamicPriceRows]);
+  const dynamicNitrogenSources = [...DEFAULT_NITRO_SOURCES];
   const selectedDynamicNitroPrice = useMemo(() => {
     if (!selectedDynamicPrice) return null;
     if (dynamicNitrogenSource && Number.isFinite(selectedDynamicPrice.nitroBySource[dynamicNitrogenSource])) {
@@ -1513,9 +1526,11 @@ export default function Home() {
       setDynamicPriceRows([]);
       setDynamicPriceLoading(false);
       setDynamicPriceError(null);
+      setDynamicPriceLoadAttempted(false);
       setDynamicDateIndex(0);
       setDynamicNitrogenSource('');
       setDynamicSimulations(null);
+      setDynamicCurvePricing(null);
       setDynamicCurveLoading(false);
       setDynamicCurveError(null);
       setSavedDynamicScenarios([]);
@@ -1570,9 +1585,11 @@ export default function Home() {
     setDynamicPriceRows([]);
     setDynamicPriceLoading(false);
     setDynamicPriceError(null);
+    setDynamicPriceLoadAttempted(false);
     setDynamicDateIndex(0);
     setDynamicNitrogenSource('');
     setDynamicSimulations(null);
+    setDynamicCurvePricing(null);
     setDynamicCurveLoading(false);
     setDynamicCurveError(null);
     setSavedDynamicScenarios([]);
@@ -1588,38 +1605,25 @@ export default function Home() {
 
   useEffect(() => {
     if (!showDashboard || !showAONR) return;
-    if (dynamicPriceRows.length > 0 || dynamicPriceLoading) return;
+    if (dynamicPriceRows.length > 0 || dynamicPriceLoading || dynamicPriceLoadAttempted) return;
 
-    const controller = new AbortController();
-    setDynamicPriceLoading(true);
+    setDynamicPriceLoadAttempted(true);
     setDynamicPriceError(null);
-    (async () => {
-      try {
-        const res = await fetch('/json/merged_prices.csv', { signal: controller.signal });
-        if (!res.ok) throw new Error(`Failed to load dynamic price dataset (${res.status}).`);
-        const raw = await res.text();
-        const parsed = parseDynamicPriceDataset(raw);
-        if (parsed.length === 0) throw new Error('Dynamic price dataset has no rows for Jan 2025–Apr 2026.');
-        setDynamicPriceRows(parsed);
-        setDynamicDateIndex((idx) => Math.min(idx, parsed.length - 1));
-        const defaultSources = Array.from(
-          new Set(parsed.flatMap((row) => Object.keys(row.nitroBySource)))
-        ).sort((a, b) => a.localeCompare(b));
-        if (defaultSources.length > 0) {
-          setDynamicNitrogenSource((current) => (current && defaultSources.includes(current) ? current : defaultSources[0]!));
-        }
-      } catch (error) {
-        if ((error as { name?: string }).name === 'AbortError') return;
-        setDynamicPriceRows([]);
-        setDynamicPriceError(
-          error instanceof Error ? error.message : 'Failed to load dynamic price dataset.'
-        );
-      } finally {
-        if (!controller.signal.aborted) setDynamicPriceLoading(false);
-      }
-    })();
-    return () => controller.abort();
-  }, [showDashboard, showAONR, dynamicPriceRows.length, dynamicPriceLoading]);
+    const dates = generateDynamicDateCandidates('2025-01-06', '2026-04-30');
+    if (dates.length === 0) {
+      setDynamicPriceError('No valid dates available for dynamic comparison.');
+      return;
+    }
+    setDynamicPriceRows(
+      dates.map((dateIso) => ({ dateIso, cornPrice: Number.NaN, nitroBySource: {} }))
+    );
+    setDynamicDateIndex((idx) => {
+      const apr13Idx = dates.findIndex((d) => d === '2026-04-13');
+      if (apr13Idx >= 0) return apr13Idx;
+      return Math.min(idx, dates.length - 1);
+    });
+    setDynamicNitrogenSource((current) => (current ? current : DEFAULT_NITRO_SOURCES[0]!));
+  }, [showDashboard, showAONR, dynamicPriceRows.length, dynamicPriceLoading, dynamicPriceLoadAttempted]);
 
   useEffect(() => {
     if (resultsSection === 'optimize') {
@@ -1746,13 +1750,73 @@ export default function Home() {
       !showDashboard ||
       !showAONR ||
       resultsSection !== 'dynamic' ||
-      selectedCellId === null ||
       !selectedDynamicPrice ||
-      selectedDynamicNitroPrice === null
+      !dynamicNitrogenSource
     ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    setDynamicPriceLoading(true);
+    setDynamicPriceError(null);
+    (async () => {
+      try {
+        const userDate = selectedDynamicPrice.dateIso;
+        const [cornRaw, nitroRaw] = await Promise.all([
+          fetchJsonWithTimeout(`/api/corn_prices?date=${encodeURIComponent(userDate)}`, controller.signal),
+          fetchJsonWithTimeout(
+            `/api/nitro_prices?date=${encodeURIComponent(userDate)}&source=${encodeURIComponent(dynamicNitrogenSource)}`,
+            controller.signal
+          ),
+        ]);
+        const cornPrice = parseCornPricePayload(cornRaw);
+        const nitroPrice = parseNitroPricePayload(nitroRaw);
+        if (cornPrice === null || nitroPrice === null) {
+          throw new Error('No backend pricing returned for selected date/source.');
+        }
+        setDynamicPriceRows((prev) =>
+          prev.map((row) =>
+            row.dateIso === userDate
+              ? {
+                  ...row,
+                  cornPrice,
+                  nitroBySource: {
+                    ...row.nitroBySource,
+                    [dynamicNitrogenSource]: nitroPrice,
+                  },
+                }
+              : row
+          )
+        );
+      } catch (error) {
+        if ((error as { name?: string }).name === 'AbortError') return;
+        setDynamicPriceError(
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch dynamic prices for selected date/source.'
+        );
+      } finally {
+        if (!controller.signal.aborted) setDynamicPriceLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [showDashboard, showAONR, resultsSection, selectedDynamicPrice?.dateIso, dynamicNitrogenSource]);
+
+  useEffect(() => {
+    if (!showDashboard || !showAONR || resultsSection !== 'dynamic' || selectedCellId === null) {
       setDynamicSimulations(null);
+      setDynamicCurvePricing(null);
       setDynamicCurveError(null);
       setDynamicCurveLoading(false);
+      return;
+    }
+    if (
+      !selectedDynamicPrice ||
+      selectedDynamicNitroPrice === null ||
+      !Number.isFinite(selectedDynamicPrice.cornPrice)
+    ) {
+      // Keep previous curve visible while date/source prices are loading.
       return;
     }
 
@@ -1777,6 +1841,10 @@ export default function Home() {
           .map((entry) => normalizeSimulation(entry))
           .filter((entry): entry is SimulationResult => entry !== null);
         setDynamicSimulations(parsed);
+        setDynamicCurvePricing({
+          cornPrice: selectedDynamicPrice.cornPrice,
+          nitroPrice: selectedDynamicNitroPrice,
+        });
       } catch (error) {
         if ((error as { name?: string }).name === 'AbortError') return;
         setDynamicSimulations(null);
@@ -1828,8 +1896,7 @@ export default function Home() {
     if (
       !dynamicSimulations ||
       dynamicSimulations.length === 0 ||
-      !selectedDynamicPrice ||
-      selectedDynamicNitroPrice === null
+      !dynamicCurvePricing
     )
       return [];
     return dynamicSimulations
@@ -1839,34 +1906,33 @@ export default function Home() {
         profit:
           row.profitDol ??
           (row.yieldBsAc !== null
-            ? selectedDynamicPrice.cornPrice * row.yieldBsAc - selectedDynamicNitroPrice * row.nitroLbAc
+            ? dynamicCurvePricing.cornPrice * row.yieldBsAc - dynamicCurvePricing.nitroPrice * row.nitroLbAc
             : null),
       }))
       .filter((row): row is { x: number; yield: number; profit: number } => row.profit !== null)
       .sort((a, b) => a.x - b.x);
-  }, [dynamicSimulations, selectedDynamicPrice, selectedDynamicNitroPrice]);
+  }, [dynamicSimulations, dynamicCurvePricing]);
   const dynamicEonrRow = useMemo(() => {
     if (
       !dynamicSimulations ||
       dynamicSimulations.length === 0 ||
-      !selectedDynamicPrice ||
-      selectedDynamicNitroPrice === null
+      !dynamicCurvePricing
     )
       return null;
     return dynamicSimulations.reduce((best, row) => {
       const bestProfit =
         best.profitDol ??
         (best.yieldBsAc !== null
-          ? selectedDynamicPrice.cornPrice * best.yieldBsAc - selectedDynamicNitroPrice * best.nitroLbAc
+          ? dynamicCurvePricing.cornPrice * best.yieldBsAc - dynamicCurvePricing.nitroPrice * best.nitroLbAc
           : Number.NEGATIVE_INFINITY);
       const rowProfit =
         row.profitDol ??
         (row.yieldBsAc !== null
-          ? selectedDynamicPrice.cornPrice * row.yieldBsAc - selectedDynamicNitroPrice * row.nitroLbAc
+          ? dynamicCurvePricing.cornPrice * row.yieldBsAc - dynamicCurvePricing.nitroPrice * row.nitroLbAc
           : Number.NEGATIVE_INFINITY);
       return rowProfit > bestProfit ? row : best;
     });
-  }, [dynamicSimulations, selectedDynamicPrice, selectedDynamicNitroPrice]);
+  }, [dynamicSimulations, dynamicCurvePricing]);
   const activeDynamicProfitBandIntervals = useMemo(() => {
     if (!dynamicCurveData.length || !dynamicEonrRow) return [];
     const eonrPt = interpolateDualAtX(dynamicCurveData, dynamicEonrRow.nitroLbAc);
@@ -2538,11 +2604,6 @@ export default function Home() {
                         <section className="overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-8 shadow-inner sm:p-10">
                           <div className="space-y-5">
                             
-                            {dynamicPriceLoading && (
-                              <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-                                Loading merged price dataset...
-                              </p>
-                            )}
                             {dynamicPriceError && (
                               <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                                 {dynamicPriceError}
@@ -2811,7 +2872,9 @@ export default function Home() {
                                         Corn Price
                                       </p>
                                       <p className="mt-1 text-2xl font-black text-amber-800">
-                                        ${selectedDynamicPrice.cornPrice.toFixed(2)}
+                                        {Number.isFinite(selectedDynamicPrice.cornPrice)
+                                          ? `$${selectedDynamicPrice.cornPrice.toFixed(2)}`
+                                          : '—'}
                                       </p>
                                       <p className="text-sm text-amber-700">per bushel</p>
                                       {savedDynamicScenarios.length > 0 && (

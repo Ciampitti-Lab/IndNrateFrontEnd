@@ -56,6 +56,24 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../../src/app/api/corn_prices/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/corn_prices">> = Specific
+  const handler = {} as typeof import("../../../src/app/api/corn_prices/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../../src/app/api/nitro_prices/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/nitro_prices">> = Specific
+  const handler = {} as typeof import("../../../src/app/api/nitro_prices/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../../src/app/api/onfarmtrials/eonr_count/route.ts
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/onfarmtrials/eonr_count">> = Specific
