@@ -1609,7 +1609,7 @@ export default function Home() {
 
     setDynamicPriceLoadAttempted(true);
     setDynamicPriceError(null);
-    const dates = generateDynamicDateCandidates('2025-01-06', '2026-04-30');
+    const dates = generateDynamicDateCandidates('2025-01-06', '2026-04-13');
     if (dates.length === 0) {
       setDynamicPriceError('No valid dates available for dynamic comparison.');
       return;
@@ -2604,7 +2604,8 @@ export default function Home() {
                         <section className="overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-slate-50/80 p-8 shadow-inner sm:p-10">
                           <div className="space-y-5">
                             
-                            {dynamicPriceError && (
+                            {dynamicPriceError &&
+                              dynamicPriceError !== 'No backend pricing returned for selected date/source.' && (
                               <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
                                 {dynamicPriceError}
                               </p>

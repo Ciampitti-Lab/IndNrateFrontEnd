@@ -1,7 +1,6 @@
 {
   "/api/corn_prices/route": "app/api/corn_prices/route.js",
   "/api/nitro_prices/route": "app/api/nitro_prices/route.js",
-  "/api/onfarmtrials/eonr_count/route": "app/api/onfarmtrials/eonr_count/route.js",
   "/api/simresults/route": "app/api/simresults/route.js",
   "/page": "app/page.js"
 }
