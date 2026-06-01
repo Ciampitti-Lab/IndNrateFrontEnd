@@ -272,7 +272,7 @@ const PLANTING_DATE_WINDOWS = [
     {
         label: 'May 16–31',
         value: 3,
-        enabled: false
+        enabled: true
     },
     {
         label: 'June 1–15',

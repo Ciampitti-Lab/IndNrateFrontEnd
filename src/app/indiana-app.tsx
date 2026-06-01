@@ -36,7 +36,7 @@ const LOADING_STATUS_MESSAGES = [
 const PLANTING_DATE_WINDOWS = [
   { label: 'Before April 30', value: 1, enabled: true },
   { label: 'May 1–15', value: 2, enabled: true },
-  { label: 'May 16–31', value: 3, enabled: false },
+  { label: 'May 16–31', value: 3, enabled: true },
   { label: 'June 1–15', value: 4, enabled: false },
 ] as const;
 
