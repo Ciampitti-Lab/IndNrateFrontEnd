@@ -34,13 +34,60 @@ const LOADING_STATUS_MESSAGES = [
 ] as const;
 
 const PLANTING_DATE_WINDOWS = [
-  { label: 'Before April 30', value: 1, enabled: true },
-  { label: 'May 1–15', value: 2, enabled: true },
-  { label: 'May 16–31', value: 3, enabled: true },
-  { label: 'June 1–15', value: 4, enabled: false },
+  { label: 'Apr 1-15', value: 0 },
+  { label: 'Apr 16-30', value: 1 },
+  { label: 'May 1–15', value: 2 },
+  { label: 'May 16–31', value: 3 },
+  { label: 'June 1–15', value: 4 },
 ] as const;
 
 const DEFAULT_PLANTING_DATE = 1;
+
+type PlantingZone = 'north' | 'central' | 'south';
+
+/** Cell-grid extent used to split Indiana into three equal south→north latitude bands. */
+const INDIANA_PLANTING_GRID_BOUNDS = {
+  minLat: 37.774034156961605,
+  maxLat: 41.83353701559401,
+  minLng: -88.09917468461651,
+  maxLng: -84.68142052044179,
+} as const;
+
+const INDIANA_BOUNDARY_RING =
+  (indianaBoundary as { geometry: { coordinates: number[][][] } }).geometry.coordinates[0] ?? [];
+
+/** Allowed planting_date values per latitude zone. */
+const PLANTING_DATES_BY_ZONE: Record<PlantingZone, readonly number[]> = {
+  north: [2, 3, 4],
+  central: [1, 2, 3],
+  south: [0, 1, 2],
+};
+
+function getPlantingZoneLatitudeBoundaries(): { southCentral: number; centralNorth: number } {
+  const { minLat, maxLat } = INDIANA_PLANTING_GRID_BOUNDS;
+  const span = maxLat - minLat;
+  return {
+    southCentral: minLat + span / 3,
+    centralNorth: minLat + (2 * span) / 3,
+  };
+}
+
+function latitudeToPlantingZone(lat: number): PlantingZone {
+  const { southCentral, centralNorth } = getPlantingZoneLatitudeBoundaries();
+  if (lat < southCentral) return 'south';
+  if (lat < centralNorth) return 'central';
+  return 'north';
+}
+
+function defaultPlantingDateForZone(zone: PlantingZone | null): number {
+  if (!zone) return DEFAULT_PLANTING_DATE;
+  return PLANTING_DATES_BY_ZONE[zone][0]!;
+}
+
+function isPlantingDateAllowedForZone(value: number, zone: PlantingZone | null): boolean {
+  if (!zone) return false;
+  return PLANTING_DATES_BY_ZONE[zone].includes(value);
+}
 
 function plantingDateLabelFromValue(value: number): string {
   return PLANTING_DATE_WINDOWS.find((w) => w.value === value)?.label ?? `Planting ${value}`;
@@ -132,12 +179,64 @@ function MapInvalidateSize({ trigger }: { trigger: unknown }) {
   return null;
 }
 
+/** Horizontal zone dividers clipped to the Indiana state outline. */
+function PlantingZoneBoundariesLayer() {
+  const map = useMap();
+
+  useEffect(() => {
+    let cancelled = false;
+    let cleanup: (() => void) | null = null;
+
+    (async () => {
+      const leaflet = await import('leaflet');
+      if (cancelled) return;
+      const L = leaflet.default ?? leaflet;
+
+      const { southCentral, centralNorth } = getPlantingZoneLatitudeBoundaries();
+
+      const lineStyle: import('leaflet').PolylineOptions = {
+        color: '#1c1917',
+        weight: 2.5,
+        opacity: 0.85,
+        dashArray: '10 8',
+        interactive: false,
+      };
+
+      const lines = [southCentral, centralNorth].flatMap((lat) =>
+        horizontalSegmentsInsideRing(lat, INDIANA_BOUNDARY_RING).map(([lng0, lng1]) =>
+          L.polyline(
+            [
+              [lat, lng0],
+              [lat, lng1],
+            ],
+            lineStyle
+          )
+        )
+      );
+
+      const group = L.layerGroup(lines);
+      group.addTo(map);
+
+      cleanup = () => {
+        map.removeLayer(group);
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [map]);
+
+  return null;
+}
+
 function CellsLayer({
   selectedCellId,
   onSelectCell,
 }: {
   selectedCellId: number | null;
-  onSelectCell: (id: number | null) => void;
+  onSelectCell: (id: number, zone: PlantingZone) => void;
 }) {
   const map = useMap();
   const [cells, setCells] = useState<GeoJsonObject | null>(null);
@@ -216,14 +315,14 @@ function CellsLayer({
       style={(feature) => (getCellId(feature) === selectedCellId ? selectedStyle : baseStyle)}
       onEachFeature={(feature, layer) => {
         layer.on({
-          click: () => {
+          click: (e: import('leaflet').LeafletMouseEvent) => {
             const l = layer as unknown as {
               setStyle?: (s: import('leaflet').PathOptions) => void;
               bringToFront?: () => void;
             };
             const cellId = getCellId(feature);
             if (cellId === null) return;
-            onSelectCell(cellId);
+            onSelectCell(cellId, latitudeToPlantingZone(e.latlng.lat));
             l.setStyle?.(selectedStyle);
             l.bringToFront?.();
           },
@@ -1267,6 +1366,34 @@ function pointInRing(lng: number, lat: number, ring: number[][]): boolean {
   return inside;
 }
 
+/** Horizontal chord segments inside a polygon ring (for zone lines clipped to state). */
+function horizontalSegmentsInsideRing(lat: number, ring: number[][]): Array<[number, number]> {
+  if (ring.length < 3) return [];
+
+  const lngs: number[] = [];
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i]![0]!;
+    const yi = ring[i]![1]!;
+    const xj = ring[j]![0]!;
+    const yj = ring[j]![1]!;
+    if (yi === yj) continue;
+    if ((yi <= lat && lat < yj) || (yj <= lat && lat < yi)) {
+      lngs.push(xi + ((lat - yi) * (xj - xi)) / (yj - yi));
+    }
+  }
+
+  lngs.sort((a, b) => a - b);
+  const segments: Array<[number, number]> = [];
+  for (let i = 0; i + 1 < lngs.length; i += 2) {
+    const lng0 = lngs[i]!;
+    const lng1 = lngs[i + 1]!;
+    if (pointInRing((lng0 + lng1) / 2, lat, ring)) {
+      segments.push([lng0, lng1]);
+    }
+  }
+  return segments;
+}
+
 function pointInPolygonRings(lng: number, lat: number, rings: number[][][]): boolean {
   if (rings.length === 0) return false;
   if (!pointInRing(lng, lat, rings[0]!)) return false;
@@ -1277,17 +1404,27 @@ function pointInPolygonRings(lng: number, lat: number, rings: number[][][]): boo
 }
 
 function findCellIdForLngLat(lng: number, lat: number, fc: FeatureCollection): number | null {
+  return findCellAtLngLat(lng, lat, fc)?.id ?? null;
+}
+
+function findCellAtLngLat(
+  lng: number,
+  lat: number,
+  fc: FeatureCollection
+): { id: number; zone: PlantingZone } | null {
   for (const feature of fc.features) {
     const rawId = feature.properties && (feature.properties as { id_cell?: unknown }).id_cell;
     if (typeof rawId !== 'number') continue;
     const geom = feature.geometry;
     if (!geom) continue;
     if (geom.type === 'Polygon' && pointInPolygonRings(lng, lat, geom.coordinates)) {
-      return rawId;
+      return { id: rawId, zone: latitudeToPlantingZone(lat) };
     }
     if (geom.type === 'MultiPolygon') {
       for (const poly of geom.coordinates) {
-        if (pointInPolygonRings(lng, lat, poly)) return rawId;
+        if (pointInPolygonRings(lng, lat, poly)) {
+          return { id: rawId, zone: latitudeToPlantingZone(lat) };
+        }
       }
     }
   }
@@ -1301,6 +1438,7 @@ export default function Home() {
   const [continueEnabled, setContinueEnabled] = useState(false);
   const [showAONR, setShowAONR] = useState(false);
   const [selectedCellId, setSelectedCellId] = useState<number | null>(null);
+  const [selectedPlantingZone, setSelectedPlantingZone] = useState<PlantingZone | null>(null);
   const [cellSimulations, setCellSimulations] = useState<SimulationResult[] | null>(null);
   const [cellDataLoading, setCellDataLoading] = useState(false);
   const [cellDataError, setCellDataError] = useState<string | null>(null);
@@ -1325,6 +1463,14 @@ export default function Home() {
   const [savedOptimizeScenarios, setSavedOptimizeScenarios] = useState<SavedOptimizeScenario[]>([]);
   const [plantingDate, setPlantingDate] = useState(DEFAULT_PLANTING_DATE);
 
+  const handleSelectCell = (id: number, zone: PlantingZone) => {
+    setSelectedCellId(id);
+    setSelectedPlantingZone(zone);
+    setPlantingDate((current) =>
+      isPlantingDateAllowedForZone(current, zone) ? current : defaultPlantingDateForZone(zone)
+    );
+  };
+
   const trialsRegionApiParam = useMemo(() => {
     const code = (selectedCountyRegion ?? selectedCountyName)?.trim();
     return code || null;
@@ -1339,6 +1485,7 @@ export default function Home() {
   /** null until mounted; geolocation only gets a real prompt on secure contexts (HTTPS or localhost). */
   const [geoSecureContext, setGeoSecureContext] = useState<boolean | null>(null);
   const pendingGeoCellIdRef = useRef<number | null>(null);
+  const pendingGeoPlantingZoneRef = useRef<PlantingZone | null>(null);
   /** Survives React Strict Mode’s double effect run so we don’t wipe geo-chosen cell on the 2nd pass. */
   const openedDashboardWithGeoRef = useRef(false);
   useEffect(() => {
@@ -1376,6 +1523,7 @@ export default function Home() {
       setGeoError(null);
       setGeoLocating(false);
       pendingGeoCellIdRef.current = null;
+      pendingGeoPlantingZoneRef.current = null;
       openedDashboardWithGeoRef.current = false;
       setContinueEnabled(false);
       setShowAONR(false);
@@ -1383,6 +1531,7 @@ export default function Home() {
       setMobileTrialsView('map');
       setMobileMapOpen(true);
       setSelectedCellId(null);
+      setSelectedPlantingZone(null);
       setCellSimulations(null);
       setCellDataError(null);
       setSelectedCountyName(null);
@@ -1403,9 +1552,13 @@ export default function Home() {
 
     const pendingCell = pendingGeoCellIdRef.current;
     if (pendingCell !== null) {
+      const pendingZone = pendingGeoPlantingZoneRef.current;
       pendingGeoCellIdRef.current = null;
+      pendingGeoPlantingZoneRef.current = null;
       openedDashboardWithGeoRef.current = true;
       setSelectedCellId(pendingCell);
+      setSelectedPlantingZone(pendingZone);
+      setPlantingDate(defaultPlantingDateForZone(pendingZone));
       setContinueEnabled(true);
       setShowAONR(true);
       setResultsSection('optimize');
@@ -1432,6 +1585,7 @@ export default function Home() {
     setMobileTrialsView('map');
     setMobileMapOpen(true);
     setSelectedCellId(null);
+    setSelectedPlantingZone(null);
     setCellSimulations(null);
     setCellDataError(null);
     setSelectedCountyName(null);
@@ -1685,7 +1839,9 @@ export default function Home() {
 
       if (continueTimerRef.current !== null) window.clearTimeout(continueTimerRef.current);
       continueTimerRef.current = window.setTimeout(() => {
-        if (!showAONR) setPlantingDate(DEFAULT_PLANTING_DATE);
+        if (!showAONR) {
+          setPlantingDate(defaultPlantingDateForZone(selectedPlantingZone));
+        }
         setShowAONR(true);
         setMobileMapOpen(false);
         continueTimerRef.current = null;
@@ -1693,7 +1849,7 @@ export default function Home() {
       return;
     }
 
-    if (!showAONR) setPlantingDate(DEFAULT_PLANTING_DATE);
+    if (!showAONR) setPlantingDate(defaultPlantingDateForZone(selectedPlantingZone));
     setShowAONR(true);
   };
 
@@ -1720,6 +1876,7 @@ export default function Home() {
   const handleChooseMapSelection = () => {
     setGeoError(null);
     pendingGeoCellIdRef.current = null;
+    pendingGeoPlantingZoneRef.current = null;
     setShowDashboard(true);
   };
 
@@ -1745,15 +1902,16 @@ export default function Home() {
         const { latitude, longitude } = pos.coords;
         try {
           const fc = await loadCellsGeoJson();
-          const id = findCellIdForLngLat(longitude, latitude, fc);
-          if (id === null) {
+          const cell = findCellAtLngLat(longitude, latitude, fc);
+          if (cell === null) {
             setGeoError(
               'Your position is outside the Indiana analysis grid. Select a cell on the map instead.'
             );
             setGeoLocating(false);
             return;
           }
-          pendingGeoCellIdRef.current = id;
+          pendingGeoCellIdRef.current = cell.id;
+          pendingGeoPlantingZoneRef.current = cell.zone;
           setShowDashboard(true);
         } catch {
           setGeoError('Could not load cell boundaries. Try again or use the map.');
@@ -1970,7 +2128,10 @@ export default function Home() {
                         <MapInvalidateSize trigger={`${showMapPanel}-${resultsSection}`} />
                         <MapTapToContinue onTap={handleMapInteraction} />
                         {(!showAONR || resultsSection === 'optimize') && (
-                          <CellsLayer selectedCellId={selectedCellId} onSelectCell={setSelectedCellId} />
+                          <>
+                            <PlantingZoneBoundariesLayer />
+                            <CellsLayer selectedCellId={selectedCellId} onSelectCell={handleSelectCell} />
+                          </>
                         )}
                         {showAONR && resultsSection === 'trials' && (
                           <CountiesLayer
@@ -2121,25 +2282,28 @@ export default function Home() {
                                 </p>
                               </div>
                             </div>
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                               {PLANTING_DATE_WINDOWS.map((window) => {
                                 const isSelected = plantingDate === window.value;
+                                const isEnabled =
+                                  selectedCellId !== null &&
+                                  isPlantingDateAllowedForZone(window.value, selectedPlantingZone);
                                 return (
                                   <button
                                     key={window.label}
                                     type="button"
-                                    disabled={!window.enabled}
+                                    disabled={!isEnabled}
                                     onClick={() => {
-                                      if (window.enabled) setPlantingDate(window.value);
+                                      if (isEnabled) setPlantingDate(window.value);
                                     }}
-                                    aria-pressed={window.enabled ? isSelected : undefined}
+                                    aria-pressed={isEnabled ? isSelected : undefined}
                                     style={
-                                      window.enabled && !isSelected
+                                      isEnabled && !isSelected
                                         ? { background: PURDUE_HEADER_BEIGE_PANEL }
                                         : undefined
                                     }
                                     className={`min-h-12 rounded-xl border px-3 py-2 text-center text-xs font-bold uppercase tracking-[0.08em] shadow-sm transition sm:text-[11px] ${
-                                      !window.enabled
+                                      !isEnabled
                                         ? 'cursor-not-allowed border-stone-400/60 bg-stone-400/25 text-stone-600 opacity-70'
                                         : isSelected
                                           ? 'cursor-pointer border-stone-950 bg-stone-950 text-[#CEB888] shadow-[0_0_0_2px_rgba(0,0,0,0.35),0_0_0_4px_#CEB888,0_4px_12px_rgba(0,0,0,0.25)] ring-2 ring-[#CEB888]/80'
