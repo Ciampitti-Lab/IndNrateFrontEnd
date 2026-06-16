@@ -1450,6 +1450,8 @@ export default function Home() {
   const [loadingWakeMessageIndex, setLoadingWakeMessageIndex] = useState(0);
   const [nPrice, setNPrice] = useState(0.65);
   const [cornPrice, setCornPrice] = useState(4.5);
+  const [debouncedNPrice, setDebouncedNPrice] = useState(nPrice);
+  const [debouncedCornPrice, setDebouncedCornPrice] = useState(cornPrice);
   const [showLocationOptions, setShowLocationOptions] = useState(false);
   const [resultsSection, setResultsSection] = useState<'optimize' | 'trials'>('optimize');
   const [mobileTrialsView, setMobileTrialsView] = useState<'map' | 'results'>('map');
@@ -1507,6 +1509,14 @@ export default function Home() {
       });
     });
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedNPrice(nPrice);
+      setDebouncedCornPrice(cornPrice);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [nPrice, cornPrice]);
 
   useEffect(() => {
     const update = () => setIsMobile(window.innerWidth < 768);
@@ -1631,8 +1641,8 @@ export default function Home() {
       try {
         const params = new URLSearchParams({
           region: trialsRegionApiParam.toLowerCase(),
-          nitro_price: String(nPrice),
-          grain_price: String(cornPrice),
+          nitro_price: String(debouncedNPrice),
+          grain_price: String(debouncedCornPrice),
         });
         const res = await fetch(`/api/onfarmtrials/eonr_count?${params.toString()}`, {
           signal: controller.signal,
@@ -1656,7 +1666,14 @@ export default function Home() {
     })();
 
     return () => controller.abort();
-  }, [showDashboard, showAONR, resultsSection, trialsRegionApiParam, nPrice, cornPrice]);
+  }, [
+    showDashboard,
+    showAONR,
+    resultsSection,
+    trialsRegionApiParam,
+    debouncedNPrice,
+    debouncedCornPrice,
+  ]);
 
   /** Cold-start hint only after 3s waiting on this request (not tied to Continue). */
   useEffect(() => {
@@ -1692,8 +1709,8 @@ export default function Home() {
     const params = new URLSearchParams({
       cell: String(selectedCellId),
       planting_date: String(plantingDate),
-      nitro_price: String(nPrice),
-      grain_price: String(cornPrice),
+      nitro_price: String(debouncedNPrice),
+      grain_price: String(debouncedCornPrice),
     });
 
     setCellDataLoading(true);
@@ -1725,7 +1742,7 @@ export default function Home() {
     })();
 
     return () => controller.abort();
-  }, [selectedCellId, plantingDate, nPrice, cornPrice]);
+  }, [selectedCellId, plantingDate, debouncedNPrice, debouncedCornPrice]);
 
   const dualCurveData = useMemo(() => {
     if (!cellSimulations || cellSimulations.length === 0) return [];
@@ -1735,24 +1752,33 @@ export default function Home() {
         yield: row.yieldBsAc ?? 0,
         profit:
           row.profitDol ??
-          (row.yieldBsAc !== null ? cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc : null),
+          (row.yieldBsAc !== null
+            ? debouncedCornPrice * row.yieldBsAc - debouncedNPrice * row.nitroLbAc
+            : null),
       }))
       .filter((row): row is { x: number; yield: number; profit: number } => row.profit !== null)
       .sort((a, b) => a.x - b.x);
-  }, [cellSimulations, nPrice, cornPrice]);
+  }, [cellSimulations, debouncedNPrice, debouncedCornPrice]);
   const eonrRow = useMemo(() => {
     if (!cellSimulations || cellSimulations.length === 0) return null;
     return cellSimulations.reduce((best, row) => {
       const bestProfit =
         best.profitDol ??
-        (best.yieldBsAc !== null ? cornPrice * best.yieldBsAc - nPrice * best.nitroLbAc : Number.NEGATIVE_INFINITY);
+        (best.yieldBsAc !== null
+          ? debouncedCornPrice * best.yieldBsAc - debouncedNPrice * best.nitroLbAc
+          : Number.NEGATIVE_INFINITY);
       const rowProfit =
         row.profitDol ??
-        (row.yieldBsAc !== null ? cornPrice * row.yieldBsAc - nPrice * row.nitroLbAc : Number.NEGATIVE_INFINITY);
+        (row.yieldBsAc !== null
+          ? debouncedCornPrice * row.yieldBsAc - debouncedNPrice * row.nitroLbAc
+          : Number.NEGATIVE_INFINITY);
       return rowProfit > bestProfit ? row : best;
     });
-  }, [cellSimulations, nPrice, cornPrice]);
-  const priceRatio = useMemo(() => (cornPrice > 0 ? nPrice / cornPrice : null), [nPrice, cornPrice]);
+  }, [cellSimulations, debouncedNPrice, debouncedCornPrice]);
+  const priceRatio = useMemo(
+    () => (debouncedCornPrice > 0 ? debouncedNPrice / debouncedCornPrice : null),
+    [debouncedNPrice, debouncedCornPrice]
+  );
 
   /** Same ±$1/ac profit band as the gray region on the economic curve (profit ≥ peak − $1/ac). */
   const eonrProfitBandSummary = useMemo(() => {
